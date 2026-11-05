@@ -262,6 +262,98 @@
     text-align: center;
 }
 
+/* 签到积分：总积分、当前档位、等级 */
+.point-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.point-head-left {
+    display: flex;
+    flex-direction: column;
+}
+
+.point-title {
+    color: #8A93A3;
+    font-size: 26rpx;
+}
+
+.point-total-row {
+    display: flex;
+    align-items: baseline;
+    margin-top: 6rpx;
+}
+
+.point-total {
+    color: #4C6FFF;
+    font-size: 60rpx;
+    font-weight: 700;
+    line-height: 72rpx;
+}
+
+.point-unit {
+    margin-left: 8rpx;
+    color: #8A93A3;
+    font-size: 24rpx;
+}
+
+.point-level {
+    padding: 10rpx 22rpx;
+    border-radius: 999rpx;
+    background: #EEF2FF;
+    color: #4C6FFF;
+    font-size: 24rpx;
+    font-weight: 600;
+}
+
+.point-meta {
+    display: flex;
+    flex-direction: column;
+    margin-top: 16rpx;
+    padding-top: 16rpx;
+    border-top: 2rpx solid #F2F4F8;
+    color: #8A93A3;
+    font-size: 24rpx;
+    line-height: 38rpx;
+}
+
+.point-today {
+    margin-top: 16rpx;
+    padding: 12rpx 18rpx;
+    border-radius: 14rpx;
+    background: #FFF7E8;
+    color: #B7791F;
+    font-size: 24rpx;
+}
+
+.point-brief {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 20rpx;
+    padding: 20rpx 24rpx;
+    border-radius: 18rpx;
+    background: #F6F8FF;
+}
+
+.point-brief-label {
+    color: #8A93A3;
+    font-size: 26rpx;
+}
+
+.point-brief-num {
+    margin-left: 16rpx;
+    color: #4C6FFF;
+    font-size: 40rpx;
+    font-weight: 700;
+}
+
+.point-brief-level {
+    color: #4C6FFF;
+    font-size: 24rpx;
+}
+
 .stats-row {
     display: flex;
     align-items: center;
@@ -481,6 +573,11 @@
     background: #EEF2FF;
     color: #4C6FFF;
     font-size: 22rpx;
+}
+
+.record-tag.earned {
+    background: #FFF3DC;
+    color: #B7791F;
 }
 
 .profile-head {

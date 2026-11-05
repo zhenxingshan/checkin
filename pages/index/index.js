@@ -2,6 +2,7 @@ const store = require('../../utils/store');
 const backend = require('../../utils/backend');
 const snapshot = require('../../utils/snapshot');
 const dateUtil = require('../../utils/date');
+const encourage = require('../../utils/encourage');
 
 const TASK_ICONS = ['🌱', '📚', '🏃', '💧', '🧘', '🎯', '☀️', '✍️'];
 const TASK_COLORS = ['#4C6FFF', '#00B894', '#FF8A4C', '#A66CFF', '#F26D8B', '#2C9CDB'];
@@ -26,6 +27,29 @@ const AUTH_VIEW = {
     desc: '请检查网络后点下方按钮重试，签到数据不会丢失。',
     button: '重试',
 };
+
+// 服务端还没部署积分版本时 user.points 会缺失，用默认值兜底，页面不报错也不崩。
+const DEFAULT_POINTS = {
+    total: 0, today: 0, streak: 0, gained: 0,
+    per_checkin: 1, next_stage_days: 3, max: 5,
+};
+
+function normalizePoints(view) {
+    const raw = view || {};
+    function num(key, fallback) {
+        const value = Number(raw[key]);
+        return isNaN(value) ? fallback : value;
+    }
+    return {
+        total: num('total', DEFAULT_POINTS.total),
+        today: num('today', DEFAULT_POINTS.today),
+        streak: num('streak', DEFAULT_POINTS.streak),
+        gained: num('gained', DEFAULT_POINTS.gained),
+        per_checkin: num('per_checkin', DEFAULT_POINTS.per_checkin),
+        next_stage_days: num('next_stage_days', DEFAULT_POINTS.next_stage_days),
+        max: num('max', DEFAULT_POINTS.max),
+    };
+}
 
 function toast(title) {
     wx.showToast({ title: title, icon: 'none', duration: 1800 });
@@ -72,6 +96,10 @@ Page({
         weekdays: ['一', '二', '三', '四', '五', '六', '日'],
         calendarCells: [],
         stats: { monthCount: 0, totalCount: 0, streak: 0 },
+        // 积分是「用户 + 自然日」维度的，与上面按任务算的 stats.streak 不同。
+        points: normalizePoints(null),
+        encourageText: '',
+        pointLevel: '初来乍到',
         todaySigned: false,
         recentRecords: [],
         checking: false,
@@ -155,6 +183,9 @@ Page({
                     activeTask: null,
                     calendarCells: [],
                     stats: { monthCount: 0, totalCount: 0, streak: 0 },
+                    points: normalizePoints(null),
+                    encourageText: '',
+                    pointLevel: encourage.levelOf(0),
                     recentRecords: [],
                     todaySigned: false,
                 });
@@ -185,7 +216,25 @@ Page({
             openidText: backend.maskOpenid(user),
             joinDate: String(user.created_at || '').slice(0, 10),
         });
+        this.applyPointView(user && user.points);
         this.persist();
+    },
+
+    // 积分视图与当天鼓励语：用户资料、本机快照、签到响应共用这一处，显示口径一致。
+    applyPointView(view) {
+        const points = normalizePoints(view);
+        const patch = {
+            points: points,
+            encourageText: encourage.pick(dateUtil.today(), points.total),
+            pointLevel: encourage.levelOf(points.total),
+        };
+        if (this.data.user) {
+            // 同步回用户对象，快照里存的也是最新积分，冷启动不会显示上一次的旧分。
+            patch.user = Object.assign({}, this.data.user, { points: points });
+            getApp().setUser(patch.user);
+        }
+        this.setData(patch);
+        return points;
     },
 
     // 冷启动同步渲染：只还原原始数据，日历/统计按今天重新算，跨天不会显示过期的签到态。
@@ -496,7 +545,12 @@ Page({
                 toast(res.error.message);
                 return null;
             }
-            wx.showToast({ title: '签到成功', icon: 'success' });
+            // 签到响应里带计分后的总览：当天第二次给别的任务签到时 gained 为 0，不加分。
+            const points = self.applyPointView(res.data && res.data.points);
+            wx.showToast({
+                title: points.gained > 0 ? '签到成功 +' + points.gained + ' 积分' : '签到成功',
+                icon: 'success',
+            });
             return self.loadCalendar();
         }).catch(function () {
             self.setData({ checking: false });

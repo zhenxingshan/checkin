@@ -110,7 +110,27 @@
                 <button class="checkin-btn {{todaySigned ? 'done' : ''}}" bindtap="onCheckIn"
                         disabled="{{todaySigned || checking || syncing}}"
                         loading="{{checking || (syncing && !todaySigned)}}">{{todaySigned ? '今日已签到 ✓' : '今日签到'}}</button>
-                <text class="checkin-hint">{{todaySigned ? '明天再来，坚持就是胜利' : '每天只能签到一次，别忘记啦'}}</text>
+                <text class="checkin-hint">{{todaySigned ? encourageText : '每天只能签到一次，别忘记啦'}}</text>
+            </view>
+
+            <!-- 积分按用户 + 自然日累计：每天只有首次签到计分，与当前选中任务无关。 -->
+            <view class="card point-card">
+                <view class="point-head">
+                    <view class="point-head-left">
+                        <text class="point-title">我的签到积分</text>
+                        <view class="point-total-row">
+                            <text class="point-total">{{points.total}}</text>
+                            <text class="point-unit">分</text>
+                        </view>
+                    </view>
+                    <text class="point-level">{{pointLevel}}</text>
+                </view>
+                <view class="point-meta">
+                    <text>每天首次签到 +{{points.per_checkin}} 分 · 连续打卡 {{points.streak}} 天</text>
+                    <text wx:if="{{points.next_stage_days > 0}}">再连续 {{points.next_stage_days}} 天升一档，单次上限 {{points.max}} 分</text>
+                    <text wx:else>已达最高档，每次 {{points.max}} 分封顶</text>
+                </view>
+                <view class="point-today" wx:if="{{points.today > 0}}">今日已获得 +{{points.today}} 积分</view>
             </view>
 
             <view class="stats-row">
@@ -162,7 +182,8 @@
                     <view class="record-dot"></view>
                     <text class="record-date">{{item.date}}</text>
                     <text class="record-time">{{item.time}}</text>
-                    <text class="record-tag">已签到</text>
+                    <text wx:if="{{item.earned_points > 0}}" class="record-tag earned">+{{item.earned_points}} 分</text>
+                    <text wx:else class="record-tag">已签到</text>
                 </view>
             </view>
         </block>
@@ -185,6 +206,13 @@
 
             <view class="card">
                 <text class="card-title">数据概览</text>
+                <view class="point-brief">
+                    <view>
+                        <text class="point-brief-label">签到积分</text>
+                        <text class="point-brief-num">{{points.total}}</text>
+                    </view>
+                    <text class="point-brief-level">{{pointLevel}}</text>
+                </view>
                 <view class="stats-row inner">
                     <view class="stat-item">
                         <text class="stat-num">{{tasks.length}}</text>
