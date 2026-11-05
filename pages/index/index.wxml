@@ -1,0 +1,232 @@
+<view class="app">
+    <view class="header">
+        <view class="header-left">
+            <text class="header-date">{{todayText}}</text>
+            <text class="header-greeting">{{greeting}}，今天也来打卡吧</text>
+        </view>
+        <view class="header-badge" style="background:{{avatarBg}}">
+            <text>{{avatarEmoji}}</text>
+        </view>
+    </view>
+
+    <view class="error-strip" wx:if="{{errorMsg}}">
+        <text class="error-text">{{errorMsg}}</text>
+        <text class="error-retry" bindtap="handleRetry">重试</text>
+    </view>
+
+    <block wx:if="{{loading}}">
+        <view class="state-card">
+            <text class="state-title">正在加载…</text>
+            <text class="state-desc">马上就好</text>
+        </view>
+    </block>
+
+    <block wx:elif="{{authState !== 'signed-in'}}">
+        <view class="login-card">
+            <text class="login-emoji">👋</text>
+            <text class="login-title">微信一键登录</text>
+            <text class="login-desc">使用微信身份开始记录你的每日签到</text>
+            <button class="primary-btn" bindtap="onWechatLogin" loading="{{signingIn}}" disabled="{{signingIn}}">使用微信登录</button>
+            <text class="login-note">登录后自动创建默认昵称和头像，可随时在「我的」修改。</text>
+        </view>
+    </block>
+
+    <block wx:else>
+        <block wx:if="{{tab === 'checkin'}}">
+            <view class="section-head">
+                <text class="section-title">我的签到任务</text>
+                <text class="section-link" bindtap="openTaskSheet">＋ 新建</text>
+            </view>
+
+            <view class="task-strip" wx:if="{{tasks.length > 0}}">
+                <view wx:for="{{tasks}}" wx:key="id" class="task-chip {{item.id === activeTaskId ? 'active' : ''}}"
+                      style="border-color:{{item.id === activeTaskId ? item.color : '#E9ECF2'}}"
+                      data-id="{{item.id}}" bindtap="selectTask">
+                    <text class="task-chip-icon">{{item.icon}}</text>
+                    <text class="task-chip-name">{{item.title}}</text>
+                </view>
+                <view class="task-chip add" bindtap="openTaskSheet">
+                    <text class="task-chip-icon">＋</text>
+                    <text class="task-chip-name">新建</text>
+                </view>
+            </view>
+
+            <view wx:if="{{tasks.length === 0}}" class="empty-card">
+                <text class="empty-emoji">📝</text>
+                <text class="empty-title">还没有签到任务</text>
+                <text class="empty-desc">新建一个任务，比如「早起」「阅读」「运动」</text>
+                <button class="primary-btn small" bindtap="openTaskSheet">新建签到任务</button>
+            </view>
+
+            <view wx:if="{{activeTask}}" class="checkin-card" style="background:{{activeTask.color}}">
+                <view class="checkin-top">
+                    <text class="checkin-icon">{{activeTask.icon}}</text>
+                    <view class="checkin-meta">
+                        <text class="checkin-name">{{activeTask.title}}</text>
+                        <text class="checkin-sub">已连续签到 {{stats.streak}} 天</text>
+                    </view>
+                    <text class="delete-btn" data-id="{{activeTask.id}}" bindtap="deleteTask">删除</text>
+                </view>
+                <button class="checkin-btn {{todaySigned ? 'done' : ''}}" bindtap="onCheckIn"
+                        disabled="{{todaySigned || checking}}" loading="{{checking}}">{{todaySigned ? '今日已签到 ✓' : '今日签到'}}</button>
+                <text class="checkin-hint">{{todaySigned ? '明天再来，坚持就是胜利' : '每天只能签到一次，别忘记啦'}}</text>
+            </view>
+
+            <view class="stats-row">
+                <view class="stat-item">
+                    <text class="stat-num">{{stats.monthCount}}</text>
+                    <text class="stat-label">当月签到</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-num">{{stats.totalCount}}</text>
+                    <text class="stat-label">累计签到</text>
+                </view>
+                <view class="stat-divider"></view>
+                <view class="stat-item">
+                    <text class="stat-num">{{stats.streak}}</text>
+                    <text class="stat-label">连续天数</text>
+                </view>
+            </view>
+
+            <view class="card calendar-card">
+                <view class="calendar-head">
+                    <text class="cal-nav" data-delta="-1" bindtap="switchMonth">‹</text>
+                    <text class="cal-title">{{calendarTitle}}</text>
+                    <text class="cal-nav" data-delta="1" bindtap="switchMonth">›</text>
+                </view>
+                <view class="week-row">
+                    <view wx:for="{{weekdays}}" wx:key="*this" class="week-cell"><text>{{item}}</text></view>
+                </view>
+                <view class="cal-grid">
+                    <block wx:for="{{calendarCells}}" wx:key="key">
+                        <view wx:if="{{item.blank}}" class="cal-cell blank"></view>
+                        <view wx:else class="cal-cell {{item.signed ? 'is-signed' : 'is-plain'}} {{item.isToday ? 'is-today' : ''}} {{item.isFuture ? 'is-future' : ''}}">
+                            <text class="cal-day">{{item.day}}</text>
+                            <text wx:if="{{item.signed}}" class="cal-check">✓</text>
+                        </view>
+                    </block>
+                </view>
+                <view class="legend">
+                    <view class="legend-item"><view class="legend-dot signed"></view><text>已签到</text></view>
+                    <view class="legend-item"><view class="legend-dot plain"></view><text>未签到</text></view>
+                    <view class="legend-item"><view class="legend-dot today"></view><text>今天</text></view>
+                </view>
+            </view>
+
+            <view class="card record-card">
+                <text class="card-title">当月签到记录</text>
+                <view wx:if="{{recentRecords.length === 0}}" class="record-empty">当月还没有签到记录</view>
+                <view wx:for="{{recentRecords}}" wx:key="id" class="record-row">
+                    <view class="record-dot"></view>
+                    <text class="record-date">{{item.date}}</text>
+                    <text class="record-time">{{item.time}}</text>
+                    <text class="record-tag">已签到</text>
+                </view>
+            </view>
+        </block>
+
+        <block wx:else>
+            <view class="card profile-card">
+                <view class="profile-head">
+                    <view class="avatar" style="background:{{avatarBg}}"><text>{{avatarEmoji}}</text></view>
+                    <view class="profile-info">
+                        <text class="profile-name">{{user.nickname}}</text>
+                        <text class="profile-sub">加入于 {{joinDate}}</text>
+                    </view>
+                    <text class="edit-link" bindtap="onEditNickname">编辑</text>
+                </view>
+                <view class="info-row">
+                    <text class="info-label">微信 OpenID</text>
+                    <text class="info-value">{{openidText}}</text>
+                </view>
+                <view class="info-row">
+                    <text class="info-label">身份状态</text>
+                    <text class="info-value">{{wechatState}}</text>
+                </view>
+            </view>
+
+            <view class="card">
+                <text class="card-title">选择默认头像</text>
+                <view class="avatar-grid">
+                    <view wx:for="{{avatarPresets}}" wx:key="key" class="avatar-option {{item.key === user.avatar ? 'active' : ''}}"
+                          style="background:{{item.bg}}" data-key="{{item.key}}" bindtap="selectAvatar">
+                        <text>{{item.emoji}}</text>
+                    </view>
+                </view>
+            </view>
+
+            <view class="card">
+                <text class="card-title">数据概览</text>
+                <view class="stats-row inner">
+                    <view class="stat-item">
+                        <text class="stat-num">{{tasks.length}}</text>
+                        <text class="stat-label">签到任务</text>
+                    </view>
+                    <view class="stat-divider"></view>
+                    <view class="stat-item">
+                        <text class="stat-num">{{stats.totalCount}}</text>
+                        <text class="stat-label">累计签到</text>
+                    </view>
+                    <view class="stat-divider"></view>
+                    <view class="stat-item">
+                        <text class="stat-num">{{stats.streak}}</text>
+                        <text class="stat-label">连续天数</text>
+                    </view>
+                </view>
+            </view>
+
+            <view class="card notice-card">
+                <text class="card-title">关于数据存储</text>
+                <text class="notice-text">用户信息、签到任务与签到记录均保存在后台 MySQL，换设备登录后数据仍在。微信 openId 由后台用登录凭证换取后入库，小程序端不会接触 AppSecret。</text>
+            </view>
+
+            <button class="ghost-btn signout" bindtap="onSignOut">退出登录</button>
+        </block>
+    </block>
+
+    <view wx:if="{{showTaskSheet}}" class="mask" bindtap="closeTaskSheet">
+        <view class="sheet" catchtap="noop">
+            <text class="sheet-title">新建签到任务</text>
+            <text class="sheet-label">任务名称</text>
+            <input class="field" value="{{taskDraft.title}}" bindinput="onTaskTitleInput" placeholder="例如：每天阅读 30 分钟" maxlength="20" />
+            <text class="sheet-label">选个图标</text>
+            <view class="icon-grid">
+                <view wx:for="{{taskIcons}}" wx:key="*this" class="icon-option {{item === taskDraft.icon ? 'active' : ''}}"
+                      data-value="{{item}}" bindtap="selectIcon"><text>{{item}}</text></view>
+            </view>
+            <text class="sheet-label">主题颜色</text>
+            <view class="color-grid">
+                <view wx:for="{{taskColors}}" wx:key="*this" class="color-option {{item === taskDraft.color ? 'active' : ''}}"
+                      style="background:{{item}}" data-value="{{item}}" bindtap="selectColor"></view>
+            </view>
+            <view class="sheet-actions">
+                <button class="ghost-btn" bindtap="closeTaskSheet">取消</button>
+                <button class="primary-btn" bindtap="submitTask" loading="{{taskBusy}}" disabled="{{taskBusy}}">创建任务</button>
+            </view>
+        </view>
+    </view>
+
+    <view wx:if="{{showNicknameSheet}}" class="mask" bindtap="closeNicknameSheet">
+        <view class="sheet" catchtap="noop">
+            <text class="sheet-title">修改昵称</text>
+            <text class="sheet-label">昵称</text>
+            <input class="field" value="{{nicknameDraft}}" bindinput="onNicknameInput" placeholder="输入新昵称" maxlength="16" />
+            <view class="sheet-actions">
+                <button class="ghost-btn" bindtap="closeNicknameSheet">取消</button>
+                <button class="primary-btn" bindtap="saveNickname">保存</button>
+            </view>
+        </view>
+    </view>
+
+    <view class="tabbar">
+        <view class="tab-item {{tab === 'checkin' ? 'active' : ''}}" data-tab="checkin" bindtap="switchTab">
+            <text class="tab-icon">✓</text>
+            <text class="tab-text">签到</text>
+        </view>
+        <view class="tab-item {{tab === 'profile' ? 'active' : ''}}" data-tab="profile" bindtap="switchTab">
+            <text class="tab-icon">☺</text>
+            <text class="tab-text">我的</text>
+        </view>
+    </view>
+</view>
