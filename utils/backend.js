@@ -38,7 +38,7 @@ function signInWithWechat() {
         if (res.error) return res;
         const body = res.data || {};
         if (!body.token || !body.user) {
-            return { data: null, error: { code: 'LOGIN_FAILED', message: '登录信息不完整，请重试' } };
+            return { data: null, error: { code: 'LOGIN_FAILED', message: '数据不完整，请重试' } };
         }
         http.setToken(body.token);
         return { data: body.user, error: null };
@@ -50,12 +50,12 @@ function silentSignIn(retryLeft) {
     return signInWithWechat().then(function (res) {
         if ((res.error || !res.data) && retryLeft > 0) return silentSignIn(retryLeft - 1);
         if (!res.error && !res.data) {
-            return { data: null, error: { code: 'LOGIN_FAILED', message: '自动登录失败，请重试' } };
+            return { data: null, error: { code: 'LOGIN_FAILED', message: '暂时没能加载，请重试' } };
         }
         return res;
     }).catch(function () {
         if (retryLeft > 0) return silentSignIn(retryLeft - 1);
-        return { data: null, error: { code: 'LOGIN_FAILED', message: '自动登录失败，请重试' } };
+        return { data: null, error: { code: 'LOGIN_FAILED', message: '暂时没能加载，请重试' } };
     });
 }
 
@@ -70,7 +70,7 @@ function ensureLogin() {
         if (res.data && res.data.logged_in !== false) return res;
         return silentSignIn(1);
     }).catch(function () {
-        return { data: null, error: { code: 'LOGIN_FAILED', message: '自动登录失败，请重试' } };
+        return { data: null, error: { code: 'LOGIN_FAILED', message: '暂时没能加载，请重试' } };
     }).then(function (res) {
         loginPromise = null;
         return res;

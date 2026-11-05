@@ -14,21 +14,57 @@
         <text class="error-retry" bindtap="handleRetry">重试</text>
     </view>
 
+    <!-- 首次进入（无本机快照）时的同构骨架屏，页面结构立刻可见，不留白屏。 -->
     <block wx:if="{{loading}}">
-        <view class="state-card">
-            <text class="state-title">{{loadingText}}</text>
-            <text class="state-desc">{{loadingDesc}}</text>
+        <view class="skeleton">
+            <view class="sk sk-heading"></view>
+            <view class="sk-strip">
+                <view class="sk sk-chip"></view>
+                <view class="sk sk-chip"></view>
+                <view class="sk sk-chip short"></view>
+            </view>
+            <view class="sk-checkin">
+                <view class="sk-checkin-top">
+                    <view class="sk sk-avatar"></view>
+                    <view class="sk-checkin-lines">
+                        <view class="sk sk-line w60"></view>
+                        <view class="sk sk-line w40"></view>
+                    </view>
+                </view>
+                <view class="sk sk-action"></view>
+            </view>
+            <view class="sk-stats">
+                <view class="sk-stat"><view class="sk sk-line w50"></view><view class="sk sk-line w70"></view></view>
+                <view class="sk-stat"><view class="sk sk-line w50"></view><view class="sk sk-line w70"></view></view>
+                <view class="sk-stat"><view class="sk sk-line w50"></view><view class="sk sk-line w70"></view></view>
+            </view>
+            <view class="card sk-calendar">
+                <view class="sk sk-line w40"></view>
+                <view class="sk-week">
+                    <view wx:for="{{skeletonDays}}" wx:key="*this" class="sk sk-day"></view>
+                </view>
+                <view class="sk-legend">
+                    <view class="sk sk-line w30"></view>
+                    <view class="sk sk-line w30"></view>
+                    <view class="sk sk-line w30"></view>
+                </view>
+            </view>
+            <view class="card sk-records">
+                <view class="sk sk-line w50"></view>
+                <view class="sk sk-line w80"></view>
+                <view class="sk sk-line w70"></view>
+            </view>
         </view>
     </block>
 
-    <!-- 正常进入小程序自动静默登录；这里只在自动登录失败或主动退出后出现。 -->
+    <!-- 初始化失败时的兜底卡片，正常进入不会出现；界面不暴露登录细节。 -->
     <block wx:elif="{{authState !== 'signed-in'}}">
         <view class="login-card">
-            <text class="login-emoji">👋</text>
+            <text class="login-emoji">🔄</text>
             <text class="login-title">{{authView.title}}</text>
             <text class="login-desc">{{authView.desc}}</text>
             <button class="primary-btn" bindtap="handleRetry">{{authView.button}}</button>
-            <text class="login-note">进入小程序会自动用微信 openId 静默登录，首次自动创建默认昵称和头像，可在「我的 - 设置」里修改。</text>
+            <text class="login-note">首次使用会自动创建默认昵称和头像，可在「我的 - 设置」里修改。</text>
         </view>
     </block>
 
@@ -72,7 +108,8 @@
                     <text class="edit-task-btn" data-id="{{activeTask.id}}" bindtap="onEditTask">编辑</text>
                 </view>
                 <button class="checkin-btn {{todaySigned ? 'done' : ''}}" bindtap="onCheckIn"
-                        disabled="{{todaySigned || checking}}" loading="{{checking}}">{{todaySigned ? '今日已签到 ✓' : '今日签到'}}</button>
+                        disabled="{{todaySigned || checking || syncing}}"
+                        loading="{{checking || (syncing && !todaySigned)}}">{{todaySigned ? '今日已签到 ✓' : '今日签到'}}</button>
                 <text class="checkin-hint">{{todaySigned ? '明天再来，坚持就是胜利' : '每天只能签到一次，别忘记啦'}}</text>
             </view>
 
@@ -173,7 +210,10 @@
         <view class="sheet" catchtap="noop">
             <text class="sheet-title">{{taskEditId ? '修改签到任务' : '新建签到任务'}}</text>
             <text class="sheet-label">任务名称</text>
-            <input class="field" value="{{taskDraft.title}}" bindinput="onTaskTitleInput" placeholder="例如：每天阅读 30 分钟" maxlength="20" />
+            <input class="field" value="{{taskDraft.title}}" bindinput="onTaskTitleInput" placeholder="例如：每天阅读 30 分钟" maxlength="{{maxTaskTitleLength}}" />
+            <view class="field-meta">
+                <text class="field-count {{taskTitleCount >= maxTaskTitleLength ? 'limit' : ''}}">{{taskTitleCount}}/{{maxTaskTitleLength}}</text>
+            </view>
             <text class="sheet-label">选个图标</text>
             <view class="icon-grid">
                 <view wx:for="{{taskIcons}}" wx:key="*this" class="icon-option {{item === taskDraft.icon ? 'active' : ''}}"
@@ -199,7 +239,10 @@
                 <text class="settings-preview-name">{{settingsDraft.nickname || '我的昵称'}}</text>
             </view>
             <text class="sheet-label">昵称</text>
-            <input class="field" value="{{settingsDraft.nickname}}" bindinput="onSettingsNicknameInput" placeholder="输入昵称" maxlength="16" />
+            <input class="field" value="{{settingsDraft.nickname}}" bindinput="onSettingsNicknameInput" placeholder="输入昵称" maxlength="{{maxNicknameLength}}" />
+            <view class="field-meta">
+                <text class="field-count {{nicknameCount >= maxNicknameLength ? 'limit' : ''}}">{{nicknameCount}}/{{maxNicknameLength}}</text>
+            </view>
             <text class="sheet-label">头像</text>
             <view class="avatar-grid">
                 <view wx:for="{{avatarPresets}}" wx:key="key" class="avatar-option {{item.key === settingsDraft.avatar ? 'active' : ''}}"
@@ -220,7 +263,10 @@
             <text class="tab-text">签到</text>
         </view>
         <view class="tab-item {{tab === 'profile' ? 'active' : ''}}" data-tab="profile" bindtap="switchTab">
-            <text class="tab-icon">☺</text>
+            <view class="tab-icon profile-icon">
+                <view class="profile-icon-head"></view>
+                <view class="profile-icon-body"></view>
+            </view>
             <text class="tab-text">我的</text>
         </view>
     </view>

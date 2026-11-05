@@ -1,5 +1,6 @@
 const store = require('../../utils/store');
 const backend = require('../../utils/backend');
+const snapshot = require('../../utils/snapshot');
 const dateUtil = require('../../utils/date');
 
 const TASK_ICONS = ['🌱', '📚', '🏃', '💧', '🧘', '🎯', '☀️', '✍️'];
@@ -15,12 +16,15 @@ const AVATAR_PRESETS = [
 const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
 // 每人最多 10 个打卡任务，前端先拦，服务端再校验一次（可被配置覆盖）。
 const MAX_TASKS = 10;
+// 字数上限：与输入框 maxlength、服务端截断长度保持一致，界面上显式展示。
+const MAX_NICKNAME_LEN = 16;
+const MAX_TASK_TITLE_LEN = 20;
 
-// 只有自动登录失败时才出现这张卡片，正常进入小程序无需点击。
+// 只在初始化失败时出现这张卡片；文案保持中性，不向用户暴露登录细节。
 const AUTH_VIEW = {
-    title: '暂时没能自动登录',
-    desc: '已自动重试，请检查网络后点下方按钮，签到数据不会丢失。',
-    button: '重试登录',
+    title: '暂时没能加载',
+    desc: '请检查网络后点下方按钮重试，签到数据不会丢失。',
+    button: '重试',
 };
 
 function toast(title) {
@@ -42,10 +46,12 @@ Page({
     data: {
         tab: 'checkin',
         loading: true,
+        // syncing 只表示后台正在校正数据：页面照常可看，仅签到按钮暂缓，避免用旧快照误操作。
+        syncing: false,
+        hasSnapshot: false,
+        skeletonDays: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35],
         authState: 'checking',
         authView: AUTH_VIEW,
-        loadingText: '正在自动登录…',
-        loadingDesc: '用微信身份安全登录，无需任何操作',
         errorMsg: '',
         user: null,
         openidText: '',
@@ -78,6 +84,10 @@ Page({
         taskColors: TASK_COLORS,
         taskDraft: { title: '', icon: TASK_ICONS[0], color: TASK_COLORS[0] },
         settingsDraft: { nickname: '', avatar: 'sprout' },
+        maxNicknameLength: MAX_NICKNAME_LEN,
+        maxTaskTitleLength: MAX_TASK_TITLE_LEN,
+        nicknameCount: 0,
+        taskTitleCount: 0,
         settingsAvatarEmoji: '🌱',
         settingsAvatarBg: '#E6F6EC',
     },
@@ -92,15 +102,19 @@ Page({
             todayText: (now.getMonth() + 1) + '月' + now.getDate() + '日 星期' + WEEK_CN[now.getDay()],
             greeting: greetingOf(now.getHours()),
         });
-        // App 冷启动时已经静默登录，这里直接复用结果，不重复发请求。
+        // 先同步渲染本机快照，页面立刻有内容；网络只负责后台校正，不再挡住首屏。
+        // 首次安装没有快照时显示同构骨架屏，也不会是一整片空白。
+        const cached = snapshot.read();
+        if (cached) this.renderSnapshot(cached);
         const app = getApp();
         const ready = app.ready || backend.ensureLogin();
         ready.then((res) => this.restore(res)).catch(() => this.restore());
     },
 
     onShow() {
-        // 登录失败后切后台再回来会自动重试一次，仍然不需要用户手动触发。
-        if (this.data.authState === 'failed' && !this.data.loading) {
+        // 失败后切后台再回来会自动重试一次，仍然不需要用户手动触发。
+        if (!this.data.loading && (this.data.authState === 'failed' || this._needsRetry)) {
+            this._needsRetry = false;
             this.restore();
         }
     },
@@ -108,44 +122,52 @@ Page({
     // prefetched：App.onLaunch 的静默登录结果；不传时重新走一遍静默登录（用于失败重试）。
     restore(prefetched) {
         const self = this;
-        this.setData({
-            loading: true,
-            errorMsg: '',
-            loadingText: prefetched ? '正在加载签到数据…' : '正在自动登录…',
-            loadingDesc: prefetched ? '马上就好' : '用微信身份安全登录，无需任何操作',
-        });
+        const cached = !!this.data.hasSnapshot;
+        // 有快照时不再把整页切回 loading，否则刚渲染出来的内容会闪没。
+        this.setData(cached ? { syncing: true, errorMsg: '' } : { loading: true, errorMsg: '' });
         const pending = prefetched ? Promise.resolve(prefetched) : backend.ensureLogin();
         return pending.then(function (res) {
             const result = res || { data: null, error: null };
-            if (result.error) {
-                getApp().setUser(null);
-                self.setData({
-                    loading: false,
-                    errorMsg: result.error.message,
-                    authState: 'failed',
-                    authView: AUTH_VIEW,
-                    user: null,
-                });
-                return null;
-            }
             const user = result.data;
-            if (!user || user.logged_in === false) {
+            if (result.error || !user || user.logged_in === false) {
+                // 具体错误只进控制台，界面上不出现任何「登录」字样。
+                if (result.error) {
+                    console.warn('[checkin] init failed:', result.error.code, result.error.message);
+                }
                 getApp().setUser(null);
-                self.setData({ loading: false, authState: 'failed', authView: AUTH_VIEW, user: null });
+                if (cached) {
+                    // 保留已渲染的快照内容，只给一个中性的重试入口。
+                    self._needsRetry = true;
+                    self.setData({ syncing: false, errorMsg: '暂时没能加载，请重试' });
+                } else {
+                    self.setData({ loading: false, errorMsg: '', authState: 'failed', authView: AUTH_VIEW, user: null });
+                }
                 return null;
             }
+            const oldUser = self.data.user;
+            if (cached && oldUser && oldUser.openid && user.openid && oldUser.openid !== user.openid) {
+                // 换了微信账号：旧快照属于上一个人，必须清掉再渲染。
+                snapshot.clear();
+                self.setData({
+                    hasSnapshot: false,
+                    tasks: [],
+                    activeTaskId: null,
+                    activeTask: null,
+                    calendarCells: [],
+                    stats: { monthCount: 0, totalCount: 0, streak: 0 },
+                    recentRecords: [],
+                    todaySigned: false,
+                });
+            }
+            self._needsRetry = false;
             self.applyUser(user);
-            self.setData({
-                authState: 'signed-in',
-                loadingText: '正在加载签到数据…',
-                loadingDesc: '马上就好',
-            });
+            self.setData({ authState: 'signed-in' });
             return self.loadAll();
         }).then(function () {
-            self.setData({ loading: false });
+            self.setData({ loading: false, syncing: false });
         }).catch(function () {
-            const patch = { loading: false, errorMsg: '数据加载失败，请重试' };
-            if (self.data.authState !== 'signed-in') {
+            const patch = { loading: false, syncing: false, errorMsg: '数据加载失败，请重试' };
+            if (!self.data.hasSnapshot && self.data.authState !== 'signed-in') {
                 patch.authState = 'failed';
                 patch.authView = AUTH_VIEW;
             }
@@ -163,16 +185,89 @@ Page({
             openidText: backend.maskOpenid(user),
             joinDate: String(user.created_at || '').slice(0, 10),
         });
+        this.persist();
     },
 
+    // 冷启动同步渲染：只还原原始数据，日历/统计按今天重新算，跨天不会显示过期的签到态。
+    renderSnapshot(cached) {
+        const tasks = cached.tasks || [];
+        let activeId = cached.activeTaskId;
+        let active = tasks.filter(function (item) { return item.id === activeId; })[0];
+        if (!active) {
+            active = tasks.length ? tasks[0] : null;
+            activeId = active ? active.id : null;
+        }
+        this.setData({
+            tasks: tasks,
+            activeTaskId: activeId,
+            activeTask: active || null,
+        });
+        this.applyRows(cached.rows || [], cached.rowsTaskId, true);
+        this.applyUser(cached.user);
+        this.setData({
+            hasSnapshot: true,
+            loading: false,
+            authState: 'signed-in',
+            syncing: true,
+            errorMsg: '',
+        });
+    },
+
+    // 从签到原始记录重算日历、统计与最近记录，并存一份快照供下次冷启动使用。
+    applyRows(rows, taskId, skipPersist) {
+        const list = rows || [];
+        const todayText = dateUtil.today();
+        const prefix = dateUtil.monthPrefix(this.data.calendarYear, this.data.calendarMonth);
+        const signedMap = {};
+        list.forEach(function (row) { signedMap[row.date] = true; });
+        let monthCount = 0;
+        Object.keys(signedMap).forEach(function (key) {
+            if (key.indexOf(prefix) === 0) monthCount += 1;
+        });
+        this._rows = list;
+        this._rowsTaskId = taskId || null;
+        this.setData({
+            today: todayText,
+            calendarCells: dateUtil.buildMonthCells(this.data.calendarYear, this.data.calendarMonth, signedMap, todayText),
+            todaySigned: !!signedMap[todayText],
+            stats: {
+                monthCount: monthCount,
+                totalCount: list.length,
+                streak: dateUtil.calcStreak(signedMap, todayText),
+            },
+            recentRecords: list.filter(function (row) {
+                return row.date.indexOf(prefix) === 0;
+            }).slice(0, 5),
+        });
+        if (!skipPersist) this.persist();
+    },
+
+    persist() {
+        if (!this.data.user) return;
+        snapshot.write({
+            user: this.data.user,
+            tasks: this.data.tasks || [],
+            activeTaskId: this.data.activeTaskId,
+            rows: this._rows || [],
+            rowsTaskId: this._rowsTaskId || null,
+        });
+    },
+
+    // 任务与签到记录并行请求，省掉一次串行往返；选中任务被删时才补拉一次。
     loadAll() {
         const self = this;
-        return store.tasks.list().then(function (res) {
-            if (res.error) {
-                self.setData({ errorMsg: res.error.message });
+        const requestedId = this.data.activeTaskId;
+        return Promise.all([
+            store.tasks.list(),
+            requestedId ? store.checkins.list({ taskId: requestedId }) : Promise.resolve({ data: [], error: null }),
+        ]).then(function (list) {
+            const tasksRes = list[0] || {};
+            const rowsRes = list[1] || {};
+            if (tasksRes.error) {
+                self.setData({ errorMsg: tasksRes.error.message });
                 return null;
             }
-            const tasks = res.data || [];
+            const tasks = tasksRes.data || [];
             let activeId = self.data.activeTaskId;
             let active = tasks.filter(function (item) { return item.id === activeId; })[0];
             if (!active) {
@@ -180,23 +275,21 @@ Page({
                 activeId = active ? active.id : null;
             }
             self.setData({ tasks: tasks, activeTaskId: activeId, activeTask: active || null });
-            return self.loadCalendar();
+            if (rowsRes.error) {
+                self.setData({ errorMsg: rowsRes.error.message });
+                return null;
+            }
+            if (activeId && activeId !== requestedId) return self.loadCalendar();
+            self.applyRows(rowsRes.data || [], activeId);
+            return null;
         });
     },
 
     loadCalendar() {
         const self = this;
         const taskId = this.data.activeTaskId;
-        const todayText = dateUtil.today();
-        const prefix = dateUtil.monthPrefix(this.data.calendarYear, this.data.calendarMonth);
         if (!taskId) {
-            this.setData({
-                today: todayText,
-                calendarCells: dateUtil.buildMonthCells(this.data.calendarYear, this.data.calendarMonth, {}, todayText),
-                todaySigned: false,
-                stats: { monthCount: 0, totalCount: 0, streak: 0 },
-                recentRecords: [],
-            });
+            this.applyRows([], null);
             return Promise.resolve();
         }
         return store.checkins.list({ taskId: taskId }).then(function (res) {
@@ -204,26 +297,7 @@ Page({
                 self.setData({ errorMsg: res.error.message });
                 return null;
             }
-            const rows = res.data || [];
-            const signedMap = {};
-            rows.forEach(function (row) { signedMap[row.date] = true; });
-            let monthCount = 0;
-            Object.keys(signedMap).forEach(function (key) {
-                if (key.indexOf(prefix) === 0) monthCount += 1;
-            });
-            self.setData({
-                today: todayText,
-                calendarCells: dateUtil.buildMonthCells(self.data.calendarYear, self.data.calendarMonth, signedMap, todayText),
-                todaySigned: !!signedMap[todayText],
-                stats: {
-                    monthCount: monthCount,
-                    totalCount: rows.length,
-                    streak: dateUtil.calcStreak(signedMap, todayText),
-                },
-                recentRecords: rows.filter(function (row) {
-                    return row.date.indexOf(prefix) === 0;
-                }).slice(0, 5),
-            });
+            self.applyRows(res.data || [], taskId);
             return null;
         });
     },
@@ -232,7 +306,7 @@ Page({
         this.setData({ tab: event.currentTarget.dataset.tab });
     },
 
-    // 仅在自动登录失败时使用，点了依旧是静默登录，不会弹授权框。
+    // 初始化失败时的兜底入口，点了依旧是静默完成，不会弹授权框。
     handleRetry() {
         this.restore();
     },
@@ -255,6 +329,7 @@ Page({
             showTaskSheet: true,
             taskEditId: null,
             taskDraft: { title: '', icon: TASK_ICONS[0], color: TASK_COLORS[0] },
+            taskTitleCount: 0,
         });
     },
 
@@ -274,14 +349,16 @@ Page({
             toast('任务不存在，请刷新后重试');
             return;
         }
+        const title = task.title || '';
         this.setData({
             showTaskSheet: true,
             taskEditId: id,
             taskDraft: {
-                title: task.title || '',
+                title: title,
                 icon: task.icon || TASK_ICONS[0],
                 color: task.color || TASK_COLORS[0],
             },
+            taskTitleCount: String(title).length,
         });
     },
 
@@ -292,7 +369,8 @@ Page({
     noop() {},
 
     onTaskTitleInput(event) {
-        this.setData({ 'taskDraft.title': event.detail.value });
+        const value = String(event.detail.value || '');
+        this.setData({ 'taskDraft.title': value, taskTitleCount: value.length });
     },
 
     selectIcon(event) {
@@ -308,6 +386,11 @@ Page({
         const title = String(draft.title || '').trim();
         if (!title) {
             toast('请输入任务名称');
+            return;
+        }
+        // maxlength 已挡住手输，这里再兜住历史超长数据/编辑载入，避免提交后被服务端悄悄截断。
+        if (title.length > MAX_TASK_TITLE_LEN) {
+            toast('任务名称最多 ' + MAX_TASK_TITLE_LEN + ' 个字');
             return;
         }
         if (this.data.taskBusy) return;
@@ -395,7 +478,8 @@ Page({
     },
 
     onCheckIn() {
-        if (this.data.todaySigned || this.data.checking) return;
+        // syncing 期间显示的是本机快照，先等后台校正完成，避免按旧状态重复签到。
+        if (this.data.todaySigned || this.data.checking || this.data.syncing) return;
         if (!this.data.activeTaskId) {
             toast('请先新建一个签到任务');
             return;
@@ -425,9 +509,11 @@ Page({
         const user = this.data.user;
         const avatar = (user && user.avatar) || AVATAR_PRESETS[0].key;
         const preset = presetOf(avatar);
+        const nickname = user && user.nickname ? user.nickname : '';
         this.setData({
             showSettingsSheet: true,
-            settingsDraft: { nickname: user ? user.nickname : '', avatar: avatar },
+            settingsDraft: { nickname: nickname, avatar: avatar },
+            nicknameCount: String(nickname).length,
             settingsAvatarEmoji: preset.emoji,
             settingsAvatarBg: preset.bg,
         });
@@ -438,7 +524,8 @@ Page({
     },
 
     onSettingsNicknameInput(event) {
-        this.setData({ 'settingsDraft.nickname': event.detail.value });
+        const value = String(event.detail.value || '');
+        this.setData({ 'settingsDraft.nickname': value, nicknameCount: value.length });
     },
 
     selectSettingsAvatar(event) {
@@ -458,10 +545,14 @@ Page({
             toast('昵称不能为空');
             return;
         }
+        if (nickname.length > MAX_NICKNAME_LEN) {
+            toast('昵称最多 ' + MAX_NICKNAME_LEN + ' 个字');
+            return;
+        }
         if (this.data.settingsBusy) return;
         const self = this;
         this.setData({ settingsBusy: true });
-        return store.users.upsert({ nickname: nickname.slice(0, 16), avatar: draft.avatar })
+        return store.users.upsert({ nickname: nickname.slice(0, MAX_NICKNAME_LEN), avatar: draft.avatar })
             .then(function (res) {
                 self.setData({ settingsBusy: false });
                 if (res.error) {

@@ -55,7 +55,6 @@
     text-decoration: underline;
 }
 
-.state-card,
 .login-card,
 .card,
 .empty-card {
@@ -66,24 +65,12 @@
     box-shadow: 0 8rpx 28rpx rgba(31, 35, 41, 0.04);
 }
 
-.state-card,
 .login-card,
 .empty-card {
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-}
-
-.state-title {
-    font-size: 30rpx;
-    font-weight: 600;
-}
-
-.state-desc {
-    margin-top: 12rpx;
-    color: #8A93A3;
-    font-size: 26rpx;
 }
 
 .login-emoji,
@@ -625,6 +612,27 @@
     font-size: 28rpx;
 }
 
+/* 输入框下方的实时字数计数，靠右对齐 */
+.field-meta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-top: 10rpx;
+    padding: 0 4rpx;
+}
+
+.field-count {
+    color: #8A93A3;
+    font-size: 22rpx;
+    font-variant-numeric: tabular-nums;
+}
+
+/* 到达上限时给个温和的提醒色 */
+.field-count.limit {
+    color: #E8703A;
+    font-weight: 600;
+}
+
 /* 设置弹层里的实时预览，随草稿头像/昵称变化 */
 .settings-preview {
     display: flex;
@@ -722,6 +730,40 @@
     line-height: 1.1;
 }
 
+/* 「我的」tab：纯 CSS 人形图标，未选中灰、选中蓝，与「签到」勾选图标风格一致 */
+.profile-icon {
+    position: relative;
+    width: 36rpx;
+    height: 36rpx;
+}
+
+.profile-icon-head,
+.profile-icon-body {
+    position: absolute;
+    background: #A7AEBB;
+}
+
+.profile-icon-head {
+    top: 3rpx;
+    left: 11rpx;
+    width: 14rpx;
+    height: 14rpx;
+    border-radius: 50%;
+}
+
+.profile-icon-body {
+    bottom: 3rpx;
+    left: 5rpx;
+    width: 26rpx;
+    height: 14rpx;
+    border-radius: 14rpx 14rpx 0 0;
+}
+
+.tab-item.active .profile-icon-head,
+.tab-item.active .profile-icon-body {
+    background: #4C6FFF;
+}
+
 .tab-text {
     margin-top: 6rpx;
     color: #A7AEBB;
@@ -732,4 +774,132 @@
 .tab-item.active .tab-text {
     color: #4C6FFF;
     font-weight: 600;
+}
+
+/* 首屏骨架屏：结构与真实页面一致，接口返回后原位替换，不会再出现整片空白。 */
+.skeleton {
+    box-sizing: border-box;
+}
+
+.sk {
+    background: #EDF0F5;
+    border-radius: 12rpx;
+    animation: sk-pulse 1.3s ease-in-out infinite;
+}
+
+@keyframes sk-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+.sk-heading {
+    width: 260rpx;
+    height: 34rpx;
+    margin: 4rpx 0 28rpx;
+    border-radius: 10rpx;
+}
+
+.sk-strip {
+    display: flex;
+    margin-bottom: 24rpx;
+}
+
+.sk-chip {
+    width: 150rpx;
+    height: 62rpx;
+    margin-right: 16rpx;
+    border-radius: 999rpx;
+}
+
+.sk-chip.short {
+    width: 110rpx;
+}
+
+.sk-checkin {
+    box-sizing: border-box;
+    margin-bottom: 24rpx;
+    padding: 32rpx;
+    border-radius: 28rpx;
+    background: #E4E9F4;
+}
+
+.sk-checkin-top {
+    display: flex;
+    align-items: center;
+}
+
+.sk-avatar {
+    width: 76rpx;
+    height: 76rpx;
+    margin-right: 20rpx;
+    border-radius: 24rpx;
+    background: #DCE3F0;
+}
+
+.sk-checkin-lines {
+    flex: 1;
+}
+
+.sk-line {
+    height: 22rpx;
+    margin-bottom: 16rpx;
+}
+
+.sk-line.w30 { width: 30%; }
+.sk-line.w40 { width: 40%; }
+.sk-line.w50 { width: 50%; }
+.sk-line.w60 { width: 60%; }
+.sk-line.w70 { width: 70%; }
+.sk-line.w80 { width: 80%; }
+
+.sk-action {
+    height: 78rpx;
+    margin-top: 24rpx;
+    border-radius: 18rpx;
+    background: #DCE3F0;
+}
+
+.sk-stats {
+    display: flex;
+    margin-bottom: 24rpx;
+    padding: 28rpx 16rpx;
+    border-radius: 24rpx;
+    background: #FFFFFF;
+}
+
+.sk-stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.sk-stat .sk-line { width: 56rpx; }
+.sk-stat .sk-line.w70 { width: 80rpx; }
+
+.sk-week {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 24rpx 0 8rpx;
+}
+
+.sk-calendar .sk-day {
+    box-sizing: border-box;
+    width: calc(14.2857% - 8rpx);
+    height: 80rpx;
+    margin: 4rpx;
+    border-radius: 16rpx;
+}
+
+.sk-legend {
+    display: flex;
+    margin-top: 16rpx;
+}
+
+.sk-legend .sk-line {
+    margin-right: 20rpx;
+}
+
+.sk-records .sk-line {
+    margin-top: 20rpx;
 }
