@@ -166,7 +166,7 @@
             <view class="card record-card">
                 <text class="card-title">当月签到记录</text>
                 <view wx:if="{{recentRecords.length === 0}}" class="record-empty">当月还没有签到记录</view>
-                <view wx:for="{{recentRecords}}" wx:key="id" class="record-row">
+                <view wx:for="{{recentRecords}}" wx:key="date" class="record-row">
                     <view class="record-dot"></view>
                     <text class="record-date">{{item.date}}</text>
                     <text class="record-time">{{item.time}}</text>
