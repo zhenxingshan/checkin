@@ -327,6 +327,28 @@
     font-size: 24rpx;
 }
 
+/* 每日一句：常驻在积分卡片里，随总积分等级换词库 */
+.encourage-box {
+    margin-top: 20rpx;
+    padding: 20rpx 24rpx;
+    border-radius: 18rpx;
+    background: #F6F8FF;
+}
+
+.encourage-title {
+    color: #4C6FFF;
+    font-size: 24rpx;
+    font-weight: 600;
+}
+
+.encourage-quote {
+    display: block;
+    margin-top: 10rpx;
+    color: #3B4351;
+    font-size: 28rpx;
+    line-height: 44rpx;
+}
+
 .point-brief {
     display: flex;
     align-items: center;
@@ -784,6 +806,165 @@
 
 .color-option.active {
     box-shadow: 0 0 0 4rpx #4C6FFF;
+}
+
+/* 积分与等级详情弹层 */
+.points-sheet {
+    /* 等级扩到 10 档后内容更长，弹层给足高度，其余靠滚动 */
+    height: 84vh;
+    padding-bottom: 40rpx;
+}
+
+.points-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24rpx 28rpx;
+    border-radius: 20rpx;
+    background: #F6F8FF;
+}
+
+.points-summary-label {
+    display: block;
+    color: #8A93A3;
+    font-size: 24rpx;
+}
+
+.points-summary-value {
+    display: block;
+    margin-top: 6rpx;
+    color: #4C6FFF;
+    font-size: 64rpx;
+    font-weight: 700;
+    line-height: 76rpx;
+}
+
+.points-summary-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.points-summary-level {
+    padding: 8rpx 20rpx;
+    border-radius: 999rpx;
+    background: #FFFFFF;
+    color: #4C6FFF;
+    font-size: 26rpx;
+    font-weight: 600;
+}
+
+.points-summary-sub {
+    margin-top: 12rpx;
+    color: #8A93A3;
+    font-size: 22rpx;
+}
+
+.level-row {
+    display: flex;
+    align-items: center;
+    padding: 18rpx 4rpx;
+    border-bottom: 2rpx solid #F2F4F8;
+}
+
+.level-row.current {
+    background: #F8FAFF;
+}
+
+.level-dot {
+    width: 14rpx;
+    height: 14rpx;
+    margin-right: 16rpx;
+    border-radius: 50%;
+    background: #D9DEE8;
+}
+
+.level-dot.reached {
+    background: #4C6FFF;
+}
+
+/* 每级一个 Lv 徽章，等级名与徽章同色，由 JS 按词库下发，样式只管排版 */
+.level-badge {
+    margin-right: 14rpx;
+    padding: 4rpx 10rpx;
+    border-radius: 8rpx;
+    font-size: 20rpx;
+    font-weight: 600;
+    line-height: 28rpx;
+}
+
+.level-name {
+    width: 150rpx;
+    color: #3B4351;
+    font-size: 28rpx;
+}
+
+.level-name.current {
+    font-weight: 700;
+}
+
+.level-range {
+    flex: 1;
+    color: #8A93A3;
+    font-size: 24rpx;
+}
+
+.level-state {
+    color: #8A93A3;
+    font-size: 24rpx;
+}
+
+.level-state.current {
+    color: #4C6FFF;
+    font-weight: 600;
+}
+
+.level-state.pending {
+    color: #B7791F;
+}
+
+.rule-note {
+    display: flex;
+    flex-direction: column;
+    color: #8A93A3;
+    font-size: 24rpx;
+    line-height: 38rpx;
+}
+
+.stage-row {
+    display: flex;
+    align-items: center;
+    padding: 16rpx 4rpx;
+    border-bottom: 2rpx solid #F2F4F8;
+}
+
+.stage-days {
+    flex: 1;
+    color: #3B4351;
+    font-size: 26rpx;
+}
+
+.stage-gain {
+    color: #4C6FFF;
+    font-size: 28rpx;
+    font-weight: 600;
+}
+
+.stage-cap {
+    margin-left: 12rpx;
+    padding: 4rpx 12rpx;
+    border-radius: 999rpx;
+    background: #FFF3DC;
+    color: #B7791F;
+    font-size: 20rpx;
+}
+
+.point-link {
+    display: block;
+    margin-top: 16rpx;
+    color: #4C6FFF;
+    font-size: 24rpx;
+    text-align: right;
 }
 
 .sheet-actions {

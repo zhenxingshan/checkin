@@ -110,20 +110,20 @@
                 <button class="checkin-btn {{todaySigned ? 'done' : ''}}" bindtap="onCheckIn"
                         disabled="{{todaySigned || checking || syncing}}"
                         loading="{{checking || (syncing && !todaySigned)}}">{{todaySigned ? '今日已签到 ✓' : '今日签到'}}</button>
-                <text class="checkin-hint">{{todaySigned ? encourageText : '每天只能签到一次，别忘记啦'}}</text>
+                <text class="checkin-hint">{{todaySigned ? '明天再来，坚持就是胜利' : '每天只能签到一次，别忘记啦'}}</text>
             </view>
 
             <!-- 积分按用户 + 自然日累计：每天只有首次签到计分，与当前选中任务无关。 -->
-            <view class="card point-card">
+            <view class="card point-card" bindtap="openPointsSheet">
                 <view class="point-head">
                     <view class="point-head-left">
                         <text class="point-title">我的签到积分</text>
                         <view class="point-total-row">
-                            <text class="point-total">{{points.total}}</text>
+                            <text class="point-total" style="color:{{pointLevelColor}}">{{points.total}}</text>
                             <text class="point-unit">分</text>
                         </view>
                     </view>
-                    <text class="point-level">{{pointLevel}}</text>
+                    <text class="point-level" style="color:{{pointLevelColor}};background:{{pointLevelTint}}">{{pointLevel}}</text>
                 </view>
                 <view class="point-meta">
                     <text>每天首次签到 +{{points.per_checkin}} 分 · 连续打卡 {{points.streak}} 天</text>
@@ -131,6 +131,12 @@
                     <text wx:else>已达最高档，每次 {{points.max}} 分封顶</text>
                 </view>
                 <view class="point-today" wx:if="{{points.today > 0}}">今日已获得 +{{points.today}} 积分</view>
+                <!-- 每日一句：常驻展示，不依赖是否已签到、也不依赖有没有任务 -->
+                <view class="encourage-box" style="background:{{pointLevelTint}}">
+                    <text class="encourage-title" style="color:{{pointLevelColor}}">今日一句 · {{pointLevel}}</text>
+                    <text class="encourage-quote">「{{encourageText}}」</text>
+                </view>
+                <text class="point-link">查看全部等级与积分规则 ›</text>
             </view>
 
             <view class="stats-row">
@@ -206,12 +212,12 @@
 
             <view class="card">
                 <text class="card-title">数据概览</text>
-                <view class="point-brief">
+                <view class="point-brief" bindtap="openPointsSheet">
                     <view>
                         <text class="point-brief-label">签到积分</text>
-                        <text class="point-brief-num">{{points.total}}</text>
+                        <text class="point-brief-num" style="color:{{pointLevelColor}}">{{points.total}}</text>
                     </view>
-                    <text class="point-brief-level">{{pointLevel}}</text>
+                    <text class="point-brief-level" style="color:{{pointLevelColor}}">{{pointLevel}} ›</text>
                 </view>
                 <view class="stats-row inner">
                     <view class="stat-item">
@@ -283,6 +289,49 @@
                 <button class="primary-btn" bindtap="saveSettings" loading="{{settingsBusy}}" disabled="{{settingsBusy}}">保存</button>
             </view>
         </view>
+    </view>
+
+    <!-- 积分与等级：所有门槛、当前进度和档位规则集中在这里 -->
+    <view wx:if="{{showPointsSheet}}" class="mask" bindtap="closePointsSheet">
+        <scroll-view class="sheet points-sheet" scroll-y="true" catchtap="noop">
+            <text class="sheet-title">积分与等级</text>
+            <view class="points-summary">
+                <view>
+                    <text class="points-summary-label">当前积分</text>
+                    <text class="points-summary-value" style="color:{{pointLevelColor}}">{{points.total}}</text>
+                </view>
+                <view class="points-summary-side">
+                    <text class="points-summary-level" style="color:{{pointLevelColor}};background:{{pointLevelTint}}">{{pointLevel}}</text>
+                    <text class="points-summary-sub">今日 +{{points.today}} · 连续打卡 {{points.streak}} 天</text>
+                </view>
+            </view>
+
+            <text class="sheet-label">等级一览</text>
+            <view wx:for="{{pointLevels}}" wx:key="name" class="level-row {{item.current ? 'current' : ''}}">
+                <view class="level-dot" style="background:{{item.dotColor}}"></view>
+                <text class="level-badge" style="color:{{item.color}};background:{{item.tint}}">{{item.badge}}</text>
+                <text class="level-name {{item.current ? 'current' : ''}}" style="color:{{item.color}}">{{item.name}}</text>
+                <text class="level-range">{{item.range}}</text>
+                <text wx:if="{{item.current}}" class="level-state current" style="color:{{item.color}}">当前</text>
+                <text wx:elif="{{item.reached}}" class="level-state">已达成</text>
+                <text wx:else class="level-state pending">还差 {{item.gap}} 分</text>
+            </view>
+
+            <text class="sheet-label">积分规则</text>
+            <view class="rule-note">
+                <text>每天只有首次签到计分，同一天签多个任务不重复加分。</text>
+                <text>连续签到按阶段递增，断签后回到初始积分。</text>
+            </view>
+            <view wx:for="{{pointStages}}" wx:key="label" class="stage-row">
+                <text class="stage-days">{{item.label}}</text>
+                <text class="stage-gain">+{{item.gain}} 分</text>
+                <text wx:if="{{item.capped}}" class="stage-cap">封顶</text>
+            </view>
+
+            <view class="sheet-actions">
+                <button class="primary-btn" bindtap="closePointsSheet">知道了</button>
+            </view>
+        </scroll-view>
     </view>
 
     <view class="tabbar">

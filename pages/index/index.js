@@ -32,6 +32,7 @@ const AUTH_VIEW = {
 const DEFAULT_POINTS = {
     total: 0, today: 0, streak: 0, gained: 0,
     per_checkin: 1, next_stage_days: 3, max: 5,
+    base: 1, step_days: 3, step_points: 1,
 };
 
 function normalizePoints(view) {
@@ -48,7 +49,55 @@ function normalizePoints(view) {
         per_checkin: num('per_checkin', DEFAULT_POINTS.per_checkin),
         next_stage_days: num('next_stage_days', DEFAULT_POINTS.next_stage_days),
         max: num('max', DEFAULT_POINTS.max),
+        base: num('base', DEFAULT_POINTS.base),
+        step_days: num('step_days', DEFAULT_POINTS.step_days),
+        step_points: num('step_points', DEFAULT_POINTS.step_points),
     };
+}
+
+// 等级一览：展开词库里的门槛，标出当前等级、已达成与还差多少分；每级自带专属配色。
+function buildPointLevels(total) {
+    const levels = encourage.levels;
+    const current = encourage.levelOf(total);
+    return levels.map(function (item, index) {
+        const next = levels[index + 1];
+        const reached = total >= item.min;
+        return {
+            name: item.name,
+            badge: 'Lv.' + (index + 1),
+            color: item.color,
+            tint: item.tint,
+            // 未达成的圆点保持灰色，已达成才用该等级的主色。
+            dotColor: reached ? item.color : '#D9DEE8',
+            range: next ? item.min + '–' + (next.min - 1) + ' 分' : item.min + ' 分起',
+            reached: reached,
+            current: item.name === current,
+            gap: reached ? 0 : item.min - total,
+        };
+    });
+}
+
+// 积分档位表：按服务端下发的规则生成，改配置不用改前端。
+function buildPointStages(points) {
+    const base = Math.max(1, points.base);
+    const stepDays = Math.max(1, points.step_days);
+    const stepPoints = Math.max(0, points.step_points);
+    const max = Math.max(base, points.max);
+    const stages = [];
+    let value = base;
+    let start = 1;
+    for (let i = 0; i < 10; i += 1) {
+        const capped = value >= max || stepPoints === 0;
+        stages.push({
+            label: capped ? '第 ' + start + ' 天起' : '第 ' + start + '–' + (start + stepDays - 1) + ' 天',
+            gain: Math.min(value, max),
+            capped: capped,
+        });
+        if (capped) break;
+        value += stepPoints;
+        start += stepDays;
+    }
+    return stages;
 }
 
 function toast(title) {
@@ -99,7 +148,9 @@ Page({
         // 积分是「用户 + 自然日」维度的，与上面按任务算的 stats.streak 不同。
         points: normalizePoints(null),
         encourageText: '',
-        pointLevel: '初来乍到',
+        pointLevel: encourage.levelOf(0),
+        pointLevelColor: encourage.themeOf(0).color,
+        pointLevelTint: encourage.themeOf(0).tint,
         todaySigned: false,
         recentRecords: [],
         checking: false,
@@ -108,6 +159,9 @@ Page({
         taskEditId: null,
         showSettingsSheet: false,
         settingsBusy: false,
+        showPointsSheet: false,
+        pointLevels: [],
+        pointStages: [],
         taskIcons: TASK_ICONS,
         taskColors: TASK_COLORS,
         taskDraft: { title: '', icon: TASK_ICONS[0], color: TASK_COLORS[0] },
@@ -186,6 +240,8 @@ Page({
                     points: normalizePoints(null),
                     encourageText: '',
                     pointLevel: encourage.levelOf(0),
+                    pointLevelColor: encourage.themeOf(0).color,
+                    pointLevelTint: encourage.themeOf(0).tint,
                     recentRecords: [],
                     todaySigned: false,
                 });
@@ -223,10 +279,13 @@ Page({
     // 积分视图与当天鼓励语：用户资料、本机快照、签到响应共用这一处，显示口径一致。
     applyPointView(view) {
         const points = normalizePoints(view);
+        const theme = encourage.themeOf(points.total);
         const patch = {
             points: points,
             encourageText: encourage.pick(dateUtil.today(), points.total),
-            pointLevel: encourage.levelOf(points.total),
+            pointLevel: theme.name,
+            pointLevelColor: theme.color,
+            pointLevelTint: theme.tint,
         };
         if (this.data.user) {
             // 同步回用户对象，快照里存的也是最新积分，冷启动不会显示上一次的旧分。
@@ -353,6 +412,19 @@ Page({
 
     switchTab(event) {
         this.setData({ tab: event.currentTarget.dataset.tab });
+    },
+
+    // 所有等级、当前积分与档位规则集中在这个弹层里，签到页和「我的」页都能点开。
+    openPointsSheet() {
+        this.setData({
+            showPointsSheet: true,
+            pointLevels: buildPointLevels(this.data.points.total),
+            pointStages: buildPointStages(this.data.points),
+        });
+    },
+
+    closePointsSheet() {
+        this.setData({ showPointsSheet: false });
     },
 
     // 初始化失败时的兜底入口，点了依旧是静默完成，不会弹授权框。
