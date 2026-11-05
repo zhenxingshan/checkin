@@ -1,8 +1,12 @@
 <view class="app">
+    <!-- 首页内容放进 scroll-view：滚动条用原生属性隐藏；弹层打开时关掉 scroll-y，滚动不会穿透到首页 -->
+    <scroll-view class="page-scroll"
+                 scroll-y="{{!showTaskSheet && !showSettingsSheet && !showPointsSheet}}"
+                 enhanced="{{true}}" show-scrollbar="{{false}}" bounces="{{false}}">
     <view class="header">
         <view class="header-left">
             <text class="header-date">{{todayText}}</text>
-            <text class="header-greeting">{{greeting}}，今天也来打卡吧</text>
+            <text class="header-greeting" style="color:{{pointLevelColor}}">「{{encourageText}}」</text>
         </view>
         <view class="header-badge" style="background:{{avatarBg}}">
             <text>{{avatarEmoji}}</text>
@@ -33,10 +37,10 @@
                 </view>
                 <view class="sk sk-action"></view>
             </view>
-            <view class="sk-stats">
-                <view class="sk-stat"><view class="sk sk-line w50"></view><view class="sk sk-line w70"></view></view>
-                <view class="sk-stat"><view class="sk sk-line w50"></view><view class="sk sk-line w70"></view></view>
-                <view class="sk-stat"><view class="sk sk-line w50"></view><view class="sk sk-line w70"></view></view>
+            <view class="card sk-point-card">
+                <view class="sk sk-line w40"></view>
+                <view class="sk sk-point-box"></view>
+                <view class="sk sk-line w80"></view>
             </view>
             <view class="card sk-calendar">
                 <view class="sk sk-line w40"></view>
@@ -71,7 +75,7 @@
     <block wx:else>
         <block wx:if="{{tab === 'checkin'}}">
             <view class="section-head">
-                <text class="section-title">我的签到任务</text>
+                <text class="section-title">我的签到任务<text class="section-count">{{tasks.length}}/{{maxTasks}}</text></text>
                 <text class="section-link" bindtap="openTaskSheet">{{tasks.length >= maxTasks ? '已达上限' : '＋ 新建'}}</text>
             </view>
 
@@ -89,7 +93,7 @@
                     <text class="task-chip-name">新建</text>
                 </view>
             </view>
-            <text class="task-tip" wx:if="{{tasks.length > 0}}">任务 {{tasks.length}}/{{maxTasks}} · 点卡片右上「编辑」改当前任务，长按任务标签可修改或删除</text>
+            <text class="task-tip" wx:if="{{tasks.length > 0}}">长按任务标签可修改或删除</text>
 
             <view wx:if="{{tasks.length === 0}}" class="empty-card">
                 <text class="empty-emoji">📝</text>
@@ -103,7 +107,7 @@
                     <text class="checkin-icon">{{activeTask.icon}}</text>
                     <view class="checkin-meta">
                         <text class="checkin-name">{{activeTask.title}}</text>
-                        <text class="checkin-sub">已连续签到 {{stats.streak}} 天</text>
+                        <text class="checkin-sub">本任务连续 {{stats.streak}} 天</text>
                     </view>
                     <text class="edit-task-btn" data-id="{{activeTask.id}}" bindtap="onEditTask">编辑</text>
                 </view>
@@ -126,33 +130,8 @@
                     <text class="point-level" style="color:{{pointLevelColor}};background:{{pointLevelTint}}">{{pointLevel}}</text>
                 </view>
                 <view class="point-meta">
-                    <text>每天首次签到 +{{points.per_checkin}} 分 · 连续打卡 {{points.streak}} 天</text>
-                    <text wx:if="{{points.next_stage_days > 0}}">再连续 {{points.next_stage_days}} 天升一档，单次上限 {{points.max}} 分</text>
-                    <text wx:else>已达最高档，每次 {{points.max}} 分封顶</text>
-                </view>
-                <view class="point-today" wx:if="{{points.today > 0}}">今日已获得 +{{points.today}} 积分</view>
-                <!-- 每日一句：常驻展示，不依赖是否已签到、也不依赖有没有任务 -->
-                <view class="encourage-box" style="background:{{pointLevelTint}}">
-                    <text class="encourage-title" style="color:{{pointLevelColor}}">今日一句 · {{pointLevel}}</text>
-                    <text class="encourage-quote">「{{encourageText}}」</text>
-                </view>
-                <text class="point-link">查看全部等级与积分规则 ›</text>
-            </view>
-
-            <view class="stats-row">
-                <view class="stat-item">
-                    <text class="stat-num">{{stats.monthCount}}</text>
-                    <text class="stat-label">当月签到</text>
-                </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
-                    <text class="stat-num">{{stats.totalCount}}</text>
-                    <text class="stat-label">累计签到</text>
-                </view>
-                <view class="stat-divider"></view>
-                <view class="stat-item">
-                    <text class="stat-num">{{stats.streak}}</text>
-                    <text class="stat-label">连续天数</text>
+                    <text wx:if="{{points.today > 0}}">今日 +{{points.today}} 分 · 连续打卡 {{points.streak}} 天</text>
+                    <text wx:else>今日首次签到 +{{points.per_checkin}} 分 · 连续打卡 {{points.streak}} 天</text>
                 </view>
             </view>
 
@@ -161,6 +140,9 @@
                     <text class="cal-nav" data-delta="-1" bindtap="switchMonth">‹</text>
                     <text class="cal-title">{{calendarTitle}}</text>
                     <text class="cal-nav" data-delta="1" bindtap="switchMonth">›</text>
+                </view>
+                <view class="calendar-summary">
+                    <text>当月已签到 {{stats.monthCount}} 次</text>
                 </view>
                 <view class="week-row">
                     <view wx:for="{{weekdays}}" wx:key="*this" class="week-cell"><text>{{item}}</text></view>
@@ -239,8 +221,9 @@
 
         </block>
     </block>
+    </scroll-view>
 
-    <view wx:if="{{showTaskSheet}}" class="mask" bindtap="closeTaskSheet">
+    <view wx:if="{{showTaskSheet}}" class="mask" bindtap="closeTaskSheet" catchtouchmove="noop">
         <view class="sheet" catchtap="noop">
             <text class="sheet-title">{{taskEditId ? '修改签到任务' : '新建签到任务'}}</text>
             <text class="sheet-label">任务名称</text>
@@ -265,7 +248,7 @@
         </view>
     </view>
 
-    <view wx:if="{{showSettingsSheet}}" class="mask" bindtap="closeSettings">
+    <view wx:if="{{showSettingsSheet}}" class="mask" bindtap="closeSettings" catchtouchmove="noop">
         <view class="sheet" catchtap="noop">
             <text class="sheet-title">账号设置</text>
             <view class="settings-preview" style="background:{{settingsAvatarBg}}">
@@ -292,8 +275,8 @@
     </view>
 
     <!-- 积分与等级：所有门槛、当前进度和档位规则集中在这里 -->
-    <view wx:if="{{showPointsSheet}}" class="mask" bindtap="closePointsSheet">
-        <scroll-view class="sheet points-sheet" scroll-y="true" catchtap="noop">
+    <view wx:if="{{showPointsSheet}}" class="mask" bindtap="closePointsSheet" catchtouchmove="noop">
+        <scroll-view class="sheet points-sheet" scroll-y="true" enhanced="{{true}}" show-scrollbar="{{false}}" bounces="{{false}}" catchtap="noop">
             <text class="sheet-title">积分与等级</text>
             <view class="points-summary">
                 <view>
@@ -321,6 +304,8 @@
             <view class="rule-note">
                 <text>每天只有首次签到计分，同一天签多个任务不重复加分。</text>
                 <text>连续签到按阶段递增，断签后回到初始积分。</text>
+                <text wx:if="{{points.next_stage_days > 0}}">当前连续 {{points.streak}} 天，再连续 {{points.next_stage_days}} 天升一档，单次上限 {{points.max}} 分。</text>
+                <text wx:else>已达最高档，每次签到 {{points.max}} 分封顶。</text>
             </view>
             <view wx:for="{{pointStages}}" wx:key="label" class="stage-row">
                 <text class="stage-days">{{item.label}}</text>

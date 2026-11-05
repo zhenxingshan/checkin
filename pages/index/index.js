@@ -108,13 +108,6 @@ function presetOf(key) {
     return AVATAR_PRESETS.filter(function (item) { return item.key === key; })[0] || AVATAR_PRESETS[0];
 }
 
-function greetingOf(hour) {
-    if (hour < 11) return '早上好';
-    if (hour < 14) return '中午好';
-    if (hour < 18) return '下午好';
-    return '晚上好';
-}
-
 Page({
     data: {
         tab: 'checkin',
@@ -134,7 +127,6 @@ Page({
         joinDate: '',
         today: '',
         todayText: '',
-        greeting: '',
         tasks: [],
         maxTasks: MAX_TASKS,
         activeTaskId: null,
@@ -147,7 +139,8 @@ Page({
         stats: { monthCount: 0, totalCount: 0, streak: 0 },
         // 积分是「用户 + 自然日」维度的，与上面按任务算的 stats.streak 不同。
         points: normalizePoints(null),
-        encourageText: '',
+        // 顶部文案在骨架屏/首屏就会渲染，先给一句默认值，之后按真实积分覆盖。
+        encourageText: encourage.pick(dateUtil.today(), 0),
         pointLevel: encourage.levelOf(0),
         pointLevelColor: encourage.themeOf(0).color,
         pointLevelTint: encourage.themeOf(0).tint,
@@ -182,7 +175,6 @@ Page({
             calendarTitle: now.getFullYear() + '年' + (now.getMonth() + 1) + '月',
             today: dateUtil.today(),
             todayText: (now.getMonth() + 1) + '月' + now.getDate() + '日 星期' + WEEK_CN[now.getDay()],
-            greeting: greetingOf(now.getHours()),
         });
         // 先同步渲染本机快照，页面立刻有内容；网络只负责后台校正，不再挡住首屏。
         // 首次安装没有快照时显示同构骨架屏，也不会是一整片空白。
@@ -238,7 +230,7 @@ Page({
                     calendarCells: [],
                     stats: { monthCount: 0, totalCount: 0, streak: 0 },
                     points: normalizePoints(null),
-                    encourageText: '',
+                    encourageText: encourage.pick(dateUtil.today(), 0),
                     pointLevel: encourage.levelOf(0),
                     pointLevelColor: encourage.themeOf(0).color,
                     pointLevelTint: encourage.themeOf(0).tint,

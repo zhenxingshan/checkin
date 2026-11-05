@@ -1,8 +1,19 @@
+/* 全局兜底：隐藏任何残留的滚动条外观；首页/弹层主要靠 scroll-view 的原生属性隐藏 */
+::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
+    color: transparent;
+}
+
 page {
     min-height: 100%;
     background: #f5f7fa;
     color: #1f2329;
     font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 button {
