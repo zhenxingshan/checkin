@@ -16,18 +16,19 @@
 
     <block wx:if="{{loading}}">
         <view class="state-card">
-            <text class="state-title">正在加载…</text>
-            <text class="state-desc">马上就好</text>
+            <text class="state-title">{{loadingText}}</text>
+            <text class="state-desc">{{loadingDesc}}</text>
         </view>
     </block>
 
+    <!-- 正常进入小程序自动静默登录；这里只在自动登录失败或主动退出后出现。 -->
     <block wx:elif="{{authState !== 'signed-in'}}">
         <view class="login-card">
             <text class="login-emoji">👋</text>
-            <text class="login-title">微信一键登录</text>
-            <text class="login-desc">使用微信身份开始记录你的每日签到</text>
-            <button class="primary-btn" bindtap="onWechatLogin" loading="{{signingIn}}" disabled="{{signingIn}}">使用微信登录</button>
-            <text class="login-note">登录后自动创建默认昵称和头像，可随时在「我的」修改。</text>
+            <text class="login-title">{{authView.title}}</text>
+            <text class="login-desc">{{authView.desc}}</text>
+            <button class="primary-btn" bindtap="handleRetry">{{authView.button}}</button>
+            <text class="login-note">进入小程序会自动用微信 openId 静默登录，首次自动创建默认昵称和头像，可在「我的 - 设置」里修改。</text>
         </view>
     </block>
 
@@ -35,13 +36,15 @@
         <block wx:if="{{tab === 'checkin'}}">
             <view class="section-head">
                 <text class="section-title">我的签到任务</text>
-                <text class="section-link" bindtap="openTaskSheet">＋ 新建</text>
+                <text class="section-link" bindtap="openTaskSheet">{{tasks.length >= maxTasks ? '已达上限' : '＋ 新建'}}</text>
             </view>
 
             <view class="task-strip" wx:if="{{tasks.length > 0}}">
                 <view wx:for="{{tasks}}" wx:key="id" class="task-chip {{item.id === activeTaskId ? 'active' : ''}}"
                       style="border-color:{{item.id === activeTaskId ? item.color : '#E9ECF2'}}"
-                      data-id="{{item.id}}" bindtap="selectTask">
+                      data-id="{{item.id}}" data-title="{{item.title}}"
+                      hover-class="task-chip-hover" hover-stay-time="80"
+                      bindtap="selectTask" bindlongpress="onTaskLongPress">
                     <text class="task-chip-icon">{{item.icon}}</text>
                     <text class="task-chip-name">{{item.title}}</text>
                 </view>
@@ -50,6 +53,7 @@
                     <text class="task-chip-name">新建</text>
                 </view>
             </view>
+            <text class="task-tip" wx:if="{{tasks.length > 0}}">任务 {{tasks.length}}/{{maxTasks}} · 点卡片右上「编辑」改当前任务，长按任务标签可修改或删除</text>
 
             <view wx:if="{{tasks.length === 0}}" class="empty-card">
                 <text class="empty-emoji">📝</text>
@@ -65,7 +69,7 @@
                         <text class="checkin-name">{{activeTask.title}}</text>
                         <text class="checkin-sub">已连续签到 {{stats.streak}} 天</text>
                     </view>
-                    <text class="delete-btn" data-id="{{activeTask.id}}" bindtap="deleteTask">删除</text>
+                    <text class="edit-task-btn" data-id="{{activeTask.id}}" bindtap="onEditTask">编辑</text>
                 </view>
                 <button class="checkin-btn {{todaySigned ? 'done' : ''}}" bindtap="onCheckIn"
                         disabled="{{todaySigned || checking}}" loading="{{checking}}">{{todaySigned ? '今日已签到 ✓' : '今日签到'}}</button>
@@ -134,25 +138,11 @@
                         <text class="profile-name">{{user.nickname}}</text>
                         <text class="profile-sub">加入于 {{joinDate}}</text>
                     </view>
-                    <text class="edit-link" bindtap="onEditNickname">编辑</text>
+                    <text class="edit-link" bindtap="openSettings">设置</text>
                 </view>
                 <view class="info-row">
                     <text class="info-label">微信 OpenID</text>
                     <text class="info-value">{{openidText}}</text>
-                </view>
-                <view class="info-row">
-                    <text class="info-label">身份状态</text>
-                    <text class="info-value">{{wechatState}}</text>
-                </view>
-            </view>
-
-            <view class="card">
-                <text class="card-title">选择默认头像</text>
-                <view class="avatar-grid">
-                    <view wx:for="{{avatarPresets}}" wx:key="key" class="avatar-option {{item.key === user.avatar ? 'active' : ''}}"
-                          style="background:{{item.bg}}" data-key="{{item.key}}" bindtap="selectAvatar">
-                        <text>{{item.emoji}}</text>
-                    </view>
                 </view>
             </view>
 
@@ -176,18 +166,12 @@
                 </view>
             </view>
 
-            <view class="card notice-card">
-                <text class="card-title">关于数据存储</text>
-                <text class="notice-text">用户信息、签到任务与签到记录均保存在后台 MySQL，换设备登录后数据仍在。微信 openId 由后台用登录凭证换取后入库，小程序端不会接触 AppSecret。</text>
-            </view>
-
-            <button class="ghost-btn signout" bindtap="onSignOut">退出登录</button>
         </block>
     </block>
 
     <view wx:if="{{showTaskSheet}}" class="mask" bindtap="closeTaskSheet">
         <view class="sheet" catchtap="noop">
-            <text class="sheet-title">新建签到任务</text>
+            <text class="sheet-title">{{taskEditId ? '修改签到任务' : '新建签到任务'}}</text>
             <text class="sheet-label">任务名称</text>
             <input class="field" value="{{taskDraft.title}}" bindinput="onTaskTitleInput" placeholder="例如：每天阅读 30 分钟" maxlength="20" />
             <text class="sheet-label">选个图标</text>
@@ -202,19 +186,30 @@
             </view>
             <view class="sheet-actions">
                 <button class="ghost-btn" bindtap="closeTaskSheet">取消</button>
-                <button class="primary-btn" bindtap="submitTask" loading="{{taskBusy}}" disabled="{{taskBusy}}">创建任务</button>
+                <button class="primary-btn" bindtap="submitTask" loading="{{taskBusy}}" disabled="{{taskBusy}}">{{taskEditId ? '保存修改' : '创建任务'}}</button>
             </view>
         </view>
     </view>
 
-    <view wx:if="{{showNicknameSheet}}" class="mask" bindtap="closeNicknameSheet">
+    <view wx:if="{{showSettingsSheet}}" class="mask" bindtap="closeSettings">
         <view class="sheet" catchtap="noop">
-            <text class="sheet-title">修改昵称</text>
+            <text class="sheet-title">账号设置</text>
+            <view class="settings-preview" style="background:{{settingsAvatarBg}}">
+                <text class="settings-preview-emoji">{{settingsAvatarEmoji}}</text>
+                <text class="settings-preview-name">{{settingsDraft.nickname || '我的昵称'}}</text>
+            </view>
             <text class="sheet-label">昵称</text>
-            <input class="field" value="{{nicknameDraft}}" bindinput="onNicknameInput" placeholder="输入新昵称" maxlength="16" />
+            <input class="field" value="{{settingsDraft.nickname}}" bindinput="onSettingsNicknameInput" placeholder="输入昵称" maxlength="16" />
+            <text class="sheet-label">头像</text>
+            <view class="avatar-grid">
+                <view wx:for="{{avatarPresets}}" wx:key="key" class="avatar-option {{item.key === settingsDraft.avatar ? 'active' : ''}}"
+                      style="background:{{item.bg}}" data-key="{{item.key}}" bindtap="selectSettingsAvatar">
+                    <text>{{item.emoji}}</text>
+                </view>
+            </view>
             <view class="sheet-actions">
-                <button class="ghost-btn" bindtap="closeNicknameSheet">取消</button>
-                <button class="primary-btn" bindtap="saveNickname">保存</button>
+                <button class="ghost-btn" bindtap="closeSettings">取消</button>
+                <button class="primary-btn" bindtap="saveSettings" loading="{{settingsBusy}}" disabled="{{settingsBusy}}">保存</button>
             </view>
         </view>
     </view>

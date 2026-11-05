@@ -164,7 +164,18 @@
 .task-strip {
     display: flex;
     flex-wrap: wrap;
-    margin-bottom: 24rpx;
+    margin-bottom: 12rpx;
+}
+
+.task-tip {
+    display: block;
+    margin: 0 4rpx 24rpx;
+    color: #A0A7B4;
+    font-size: 22rpx;
+}
+
+.task-chip-hover {
+    background: #EEF2FF;
 }
 
 .task-chip {
@@ -230,10 +241,11 @@
     font-size: 24rpx;
 }
 
-.delete-btn {
-    padding: 8rpx 18rpx;
+/* 编辑入口在卡片顶部，与底部签到按钮拉开距离，不做破坏性操作 */
+.edit-task-btn {
+    padding: 8rpx 22rpx;
     border-radius: 999rpx;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.22);
     color: #FFFFFF;
     font-size: 24rpx;
 }
@@ -568,20 +580,6 @@
     border-color: #4C6FFF;
 }
 
-.notice-text {
-    display: block;
-    margin-top: 16rpx;
-    color: #7C8493;
-    font-size: 24rpx;
-    line-height: 1.7;
-}
-
-.signout {
-    width: 100%;
-    margin-top: 8rpx;
-    color: #C4442F;
-}
-
 .mask {
     position: fixed;
     top: 0;
@@ -625,6 +623,25 @@
     background: #F4F6FA;
     color: #1F2329;
     font-size: 28rpx;
+}
+
+/* 设置弹层里的实时预览，随草稿头像/昵称变化 */
+.settings-preview {
+    display: flex;
+    align-items: center;
+    padding: 24rpx 28rpx;
+    border-radius: 20rpx;
+}
+
+.settings-preview-emoji {
+    font-size: 64rpx;
+}
+
+.settings-preview-name {
+    margin-left: 24rpx;
+    color: #1F2329;
+    font-size: 32rpx;
+    font-weight: 600;
 }
 
 .icon-grid,

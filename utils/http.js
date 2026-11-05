@@ -1,10 +1,11 @@
 // 后台接口层：统一封装 wx.request、X-Token 凭证与 { data, error } 响应形状。
 //
-// 联调：BASE_URL 指向本机 Spring Boot（微信开发者工具需关闭「校验合法域名」）。
-// 上线：改成已配置 request 合法域名的 https 地址，并把 project.config.json 的 urlCheck 改回 true。
-// 真机预览不能用 localhost，要填电脑的局域网 IP 或公网域名。
+// 当前指向已部署的线上后台，所有接口路径均以 /api/... 开头，直接拼接即可（末尾不要带 /）。
+// 微信公众平台需把 https://checkin.8380.fun 加入「request 合法域名」，并把 project.config.json
+// 的 urlCheck 改回 true；未配置前开发者工具需保持 urlCheck=false 才能联调。
+// 本地联调时把下面一行改成 http://localhost:8080（真机预览不能用 localhost）。
 
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = 'https://checkin.8380.fun';
 const TOKEN_KEY = 'daily_checkin_token';
 
 function readToken() {
