@@ -20,6 +20,10 @@ const MAX_TASKS = 10;
 // 字数上限：与输入框 maxlength、服务端截断长度保持一致，界面上显式展示。
 const MAX_NICKNAME_LEN = 16;
 const MAX_TASK_TITLE_LEN = 20;
+// 长按撤销当天签到：按住 5 秒，进度每 100ms 刷新；手指明显移动即放弃，避免滑动误触。
+const CANCEL_HOLD_MS = 5000;
+const HOLD_TICK_MS = 100;
+const HOLD_MOVE_TOLERANCE = 12;
 
 // 只在初始化失败时出现这张卡片；文案保持中性，不向用户暴露登录细节。
 const AUTH_VIEW = {
@@ -34,6 +38,12 @@ const DEFAULT_POINTS = {
     per_checkin: 1, next_stage_days: 3, max: 5,
     base: 1, step_days: 3, step_points: 1,
 };
+
+// 鼓励语的人员因子：由 openid 本地派生，只参与选句计算，不写日志、不上传。
+// 同一个人每天换一句、当天刷新不跳变；不同人当天看到不同句子。
+function seedOf(user) {
+    return encourage.seed((user && user.openid) || '');
+}
 
 function normalizePoints(view) {
     const raw = view || {};
@@ -134,13 +144,20 @@ Page({
         calendarYear: 2026,
         calendarMonth: 1,
         calendarTitle: '',
+        isCurrentMonth: true,
+        // 长按撤销当天签到的进度态；只作用于「今天 + 已签到」的日历格子。
+        holdActive: false,
+        holdProgress: 0,
+        holdSecondsLeft: 5,
+        holdDate: '',
+        cancelBusy: false,
         weekdays: ['一', '二', '三', '四', '五', '六', '日'],
         calendarCells: [],
         stats: { monthCount: 0, totalCount: 0, streak: 0 },
         // 积分是「用户 + 自然日」维度的，与上面按任务算的 stats.streak 不同。
         points: normalizePoints(null),
-        // 顶部文案在骨架屏/首屏就会渲染，先给一句默认值，之后按真实积分覆盖。
-        encourageText: encourage.pick(dateUtil.today(), 0),
+        // 顶部文案在骨架屏/首屏就会渲染，先给一句默认值；有快照时 renderSnapshot 会立刻按本人重算。
+        encourageText: encourage.pick(dateUtil.today(), 0, seedOf(null)),
         pointLevel: encourage.levelOf(0),
         pointLevelColor: encourage.themeOf(0).color,
         pointLevelTint: encourage.themeOf(0).tint,
@@ -155,6 +172,13 @@ Page({
         showPointsSheet: false,
         pointLevels: [],
         pointStages: [],
+        // 拖动排序弹层：sortTasks 是临时副本，点「保存顺序」才提交，取消不影响首页。
+        showSortSheet: false,
+        sortTasks: [],
+        sortBusy: false,
+        dragIndex: -1,
+        dropIndex: -1,
+        sortCommitting: false,
         taskIcons: TASK_ICONS,
         taskColors: TASK_COLORS,
         taskDraft: { title: '', icon: TASK_ICONS[0], color: TASK_COLORS[0] },
@@ -173,6 +197,7 @@ Page({
             calendarYear: now.getFullYear(),
             calendarMonth: now.getMonth() + 1,
             calendarTitle: now.getFullYear() + '年' + (now.getMonth() + 1) + '月',
+            isCurrentMonth: true,
             today: dateUtil.today(),
             todayText: (now.getMonth() + 1) + '月' + now.getDate() + '日 星期' + WEEK_CN[now.getDay()],
         });
@@ -186,11 +211,21 @@ Page({
     },
 
     onShow() {
+        // 跨天/跨月后回到前台时，重算「回到本月」按钮的显隐。
+        this.syncMonthState();
         // 失败后切后台再回来会自动重试一次，仍然不需要用户手动触发。
         if (!this.data.loading && (this.data.authState === 'failed' || this._needsRetry)) {
             this._needsRetry = false;
             this.restore();
         }
+    },
+
+    onHide() {
+        this.clearCancelHold();
+    },
+
+    onUnload() {
+        this.clearCancelHold();
     },
 
     // prefetched：App.onLaunch 的静默登录结果；不传时重新走一遍静默登录（用于失败重试）。
@@ -230,7 +265,7 @@ Page({
                     calendarCells: [],
                     stats: { monthCount: 0, totalCount: 0, streak: 0 },
                     points: normalizePoints(null),
-                    encourageText: encourage.pick(dateUtil.today(), 0),
+                    encourageText: encourage.pick(dateUtil.today(), 0, seedOf(user)),
                     pointLevel: encourage.levelOf(0),
                     pointLevelColor: encourage.themeOf(0).color,
                     pointLevelTint: encourage.themeOf(0).tint,
@@ -274,7 +309,7 @@ Page({
         const theme = encourage.themeOf(points.total);
         const patch = {
             points: points,
-            encourageText: encourage.pick(dateUtil.today(), points.total),
+            encourageText: encourage.pick(dateUtil.today(), points.total, seedOf(this.data.user)),
             pointLevel: theme.name,
             pointLevelColor: theme.color,
             pointLevelTint: theme.tint,
@@ -541,7 +576,7 @@ Page({
         });
     },
 
-    // 长按任务标签弹出操作菜单；删除仍需二次确认，避免误触。
+    // 长按任务标签：拖动排序 + 修改 + 删除；删除仍需二次确认。
     onTaskLongPress(event) {
         const dataset = event.currentTarget.dataset;
         const id = Number(dataset.id);
@@ -549,14 +584,29 @@ Page({
         this._lastLongPressAt = Date.now();
         const title = String(dataset.title || '该任务');
         const self = this;
+        const items = [];
+        const actions = [];
+        if ((this.data.tasks || []).length > 1) {
+            items.push('拖动排序');
+            actions.push({ type: 'sort' });
+        }
+        items.push('修改任务');
+        actions.push({ type: 'edit' });
+        items.push('删除任务');
+        actions.push({ type: 'remove' });
         wx.showActionSheet({
-            itemList: ['修改任务', '删除任务'],
+            itemList: items,
             success: function (res) {
-                if (res.tapIndex === 0) {
+                const action = actions[res.tapIndex];
+                if (!action) return;
+                if (action.type === 'sort') {
+                    self.openSortSheet();
+                    return;
+                }
+                if (action.type === 'edit') {
                     self.showTaskEditor(id);
                     return;
                 }
-                if (res.tapIndex !== 1) return;
                 wx.showModal({
                     title: '删除任务',
                     content: '确定删除「' + title + '」吗？该任务的签到记录也会一并清除，且无法恢复。',
@@ -579,15 +629,266 @@ Page({
         });
     },
 
+    // 长按菜单里的排序入口：拿一份任务副本进弹层，取消/关闭都不会动首页顺序。
+    openSortSheet() {
+        const tasks = this.data.tasks || [];
+        if (tasks.length < 2) {
+            toast('至少两个任务才能排序');
+            return;
+        }
+        const self = this;
+        this.setData({
+            showSortSheet: true,
+            sortTasks: tasks.map(function (item) {
+                return { id: item.id, title: item.title, icon: item.icon, color: item.color, shift: 0 };
+            }),
+            dragIndex: -1,
+            dropIndex: -1,
+            sortCommitting: false,
+        }, function () {
+            self.cacheSortRects();
+        });
+    },
+
+    closeSortSheet() {
+        if (this.data.sortBusy) return;
+        this.setData({ showSortSheet: false, dragIndex: -1, dropIndex: -1, sortCommitting: false });
+    },
+
+    // 记录每行真实位置与相邻行间距（px，含间距），用作拖动时让位的步长，不写死行高。
+    cacheSortRects() {
+        const self = this;
+        wx.createSelectorQuery().selectAll('.sort-row')
+            .boundingClientRect(function (rects) {
+                self._sortRects = rects || [];
+                self._sortStep = rects && rects.length > 1
+                    ? rects[1].top - rects[0].top
+                    : (rects && rects.length ? rects[0].height : 0);
+            }).exec();
+    },
+
+    // 按住手柄开始拖：记录起点、行间距，并把所有行位移清零。
+    onSortTouchStart(event) {
+        if (this.data.sortBusy || this.data.dragIndex >= 0) return;
+        const index = Number(event.currentTarget.dataset.index);
+        const touch = event.touches && event.touches[0];
+        if (isNaN(index) || index < 0 || !touch) return;
+        this._sortStartY = touch.clientY;
+        this._sortFrom = index;
+        this._sortLastDy = 0;
+        this.cacheSortRects();
+        const list = (this.data.sortTasks || []).map(function (t) {
+            return Object.assign({}, t, { shift: 0 });
+        });
+        this.setData({ dragIndex: index, dropIndex: index, sortTasks: list, sortCommitting: false });
+    },
+
+    // 拖动中实时让位：被跨过的行立即上下滑动腾出空位，拖动行跟随手指，松手前不重排数组。
+    // 落点直接用「位移 / 行间距」四舍五入得到，不依赖已让位的行位置，避免坐标失真。
+    onSortTouchMove(event) {
+        if (this.data.dragIndex < 0) return;
+        const touch = event.touches && event.touches[0];
+        if (!touch) return;
+        const step = this._sortStep || 0;
+        const from = this._sortFrom;
+        const dy = touch.clientY - this._sortStartY;
+        const list = this.data.sortTasks || [];
+        const n = list.length;
+        if (!step) {
+            // 尚未取到行高时先用拖动行跟随手指，避免卡死。
+            const updated = list.map(function (t, i) {
+                return Object.assign({}, t, { shift: i === from ? dy : 0 });
+            });
+            this._sortLastDy = dy;
+            this.setData({ dropIndex: from, sortTasks: updated });
+            return;
+        }
+        let to = from + Math.round(dy / step);
+        if (to < 0) to = 0;
+        if (to > n - 1) to = n - 1;
+        const updated = list.map(function (t, i) {
+            let shift = 0;
+            if (i === from) {
+                shift = dy;
+            } else if (from < i && i <= to) {
+                shift = -step;
+            } else if (to <= i && i < from) {
+                shift = step;
+            }
+            return Object.assign({}, t, { shift: shift });
+        });
+        this._sortLastDy = dy;
+        this.setData({ dropIndex: to, sortTasks: updated });
+    },
+
+    // 松手分两段，避免「瞬间重排 + 清位移」导致的弹跳：
+    // 第1段立即重排数组，并用「偏移」抵消布局变化带来的视觉跳动，同时关闭过渡；
+    // 第2段（渲染完成后）开启过渡并把位移归零，拖动行小幅平滑落入最终位置，其他行本就在最终位不动。
+    onSortTouchEnd() {
+        if (this.data.dragIndex < 0) return;
+        const from = this._sortFrom;
+        const to = this.data.dropIndex;
+        const step = this._sortStep || 0;
+        const list = (this.data.sortTasks || []).slice();
+        const self = this;
+        if (from >= 0 && to >= 0 && from !== to && from < list.length && to < list.length) {
+            const moved = list.splice(from, 1)[0];
+            list.splice(to, 0, moved);
+            const dy = this._sortLastDy || 0;
+            // 被跨过的行在重排后新布局位恰好等于拖动中视觉位，故位移归零即可；
+            // 只有拖动行需要保留「手指位移 - 整段距离」的偏移，抵消瞬间跳变。
+            const offset = dy - (to - from) * step;
+            const updated = list.map(function (t, j) {
+                return Object.assign({}, t, { shift: (j === to) ? offset : 0 });
+            });
+            this.setData({ sortTasks: updated, dragIndex: -1, dropIndex: -1, sortCommitting: true });
+            wx.nextTick(function () {
+                const settled = (self.data.sortTasks || []).map(function (t) {
+                    return Object.assign({}, t, { shift: 0 });
+                });
+                self.setData({ sortTasks: settled, sortCommitting: false });
+            });
+        } else {
+            // 没有跨行：拖动行平滑弹回原位即可。
+            const reset = list.map(function (t) { return Object.assign({}, t, { shift: 0 }); });
+            this.setData({ sortTasks: reset, dragIndex: -1, dropIndex: -1 });
+        }
+        this._sortFrom = -1;
+        this._sortRects = [];
+    },
+
+    // 把完整 id 顺序提交给后端整列重排，一次请求落库。
+    saveSortOrder() {
+        if (this.data.sortBusy) return;
+        const ids = (this.data.sortTasks || []).map(function (item) { return item.id; });
+        if (ids.length < 2) return;
+        const self = this;
+        this.setData({ sortBusy: true });
+        store.tasks.reorder(ids).then(function (res) {
+            self.setData({ sortBusy: false });
+            if (res.error) {
+                toast(res.error.message);
+                return null;
+            }
+            const tasks = res.data || [];
+            const active = tasks.filter(function (item) {
+                return item.id === self.data.activeTaskId;
+            })[0] || null;
+            self.setData({
+                tasks: tasks,
+                activeTask: active,
+                showSortSheet: false,
+                dragIndex: -1,
+                dropIndex: -1,
+                sortCommitting: false,
+            });
+            self.persist();
+            wx.showToast({ title: '顺序已保存', icon: 'success' });
+            return null;
+        }).catch(function () {
+            self.setData({ sortBusy: false });
+            toast('排序失败，请重试');
+        });
+    },
+
     switchMonth(event) {
         const delta = Number(event.currentTarget.dataset.delta) || 0;
         const next = dateUtil.shiftMonth(this.data.calendarYear, this.data.calendarMonth, delta);
-        this.setData({
-            calendarYear: next.year,
-            calendarMonth: next.month,
-            calendarTitle: next.year + '年' + next.month + '月',
-        });
+        this.setData({ calendarYear: next.year, calendarMonth: next.month });
+        this.syncMonthState();
         this.loadCalendar();
+    },
+
+    // 翻了很多个月后一键回到当前月份，并重新拉该月记录。
+    backToCurrentMonth() {
+        const now = new Date();
+        this.setData({ calendarYear: now.getFullYear(), calendarMonth: now.getMonth() + 1 });
+        this.syncMonthState();
+        this.loadCalendar();
+    },
+
+    syncMonthState() {
+        const now = new Date();
+        this.setData({
+            isCurrentMonth: this.data.calendarYear === now.getFullYear()
+                && this.data.calendarMonth === now.getMonth() + 1,
+            calendarTitle: this.data.calendarYear + '年' + this.data.calendarMonth + '月',
+        });
+    },
+
+    // 长按 5 秒撤销当天签到：只有「今天且已签到」的格子会启动计时，历史日期一律不响应。
+    onCalCellTouchStart(event) {
+        const dataset = event.currentTarget.dataset;
+        if (!dataset.today || !dataset.signed) return;
+        if (this.data.syncing || this.data.checking || this.data.cancelBusy) return;
+        if (!this.data.activeTaskId) return;
+        this.clearCancelHold();
+        const touch = event.touches && event.touches[0];
+        this._holdStartPos = touch ? { x: touch.clientX, y: touch.clientY } : null;
+        const self = this;
+        const startAt = Date.now();
+        this.setData({
+            holdActive: true, holdProgress: 0,
+            holdSecondsLeft: Math.ceil(CANCEL_HOLD_MS / 1000), holdDate: dataset.date,
+        });
+        this._holdTimer = setInterval(function () {
+            const elapsed = Date.now() - startAt;
+            self.setData({
+                holdProgress: Math.min(100, Math.round(elapsed / CANCEL_HOLD_MS * 100)),
+                holdSecondsLeft: Math.max(1, Math.ceil((CANCEL_HOLD_MS - elapsed) / 1000)),
+            });
+            if (elapsed < CANCEL_HOLD_MS) return;
+            self.clearCancelHold();
+            self.cancelTodayCheckin();
+        }, HOLD_TICK_MS);
+    },
+
+    onCalCellTouchMove(event) {
+        if (!this._holdTimer || !this._holdStartPos) return;
+        const touch = event.touches && event.touches[0];
+        if (!touch) return;
+        if (Math.abs(touch.clientX - this._holdStartPos.x) > HOLD_MOVE_TOLERANCE
+            || Math.abs(touch.clientY - this._holdStartPos.y) > HOLD_MOVE_TOLERANCE) {
+            this.clearCancelHold();
+        }
+    },
+
+    onCalCellTouchEnd() {
+        this.clearCancelHold();
+    },
+
+    clearCancelHold() {
+        if (this._holdTimer) {
+            clearInterval(this._holdTimer);
+            this._holdTimer = null;
+        }
+        this._holdStartPos = null;
+        if (this.data.holdActive || this.data.holdProgress) {
+            this.setData({ holdActive: false, holdProgress: 0, holdDate: '' });
+        }
+    },
+
+    cancelTodayCheckin() {
+        if (this.data.cancelBusy || !this.data.activeTaskId) return;
+        const self = this;
+        this.setData({ cancelBusy: true });
+        return store.checkins.cancelToday(this.data.activeTaskId).then(function (res) {
+            self.setData({ cancelBusy: false });
+            if (res.error) {
+                toast(res.error.message);
+                return null;
+            }
+            self.applyPointView(res.data && res.data.points);
+            const back = (res.data && res.data.earned_points) || 0;
+            wx.showToast({
+                title: back > 0 ? '已撤销，退回 ' + back + ' 积分' : '已撤销今日签到',
+                icon: 'success',
+            });
+            return self.loadCalendar();
+        }).catch(function () {
+            self.setData({ cancelBusy: false });
+            toast('撤销失败，请重试');
+        });
     },
 
     onCheckIn() {

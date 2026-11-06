@@ -93,5 +93,5 @@ module.exports = {
     get: function (path, query) { return request('GET', path, null, query); },
     post: function (path, data) { return request('POST', path, data, null); },
     put: function (path, data) { return request('PUT', path, data, null); },
-    del: function (path) { return request('DELETE', path, null, null); },
+    del: function (path, query) { return request('DELETE', path, null, query || null); },
 };

@@ -1,7 +1,7 @@
 <view class="app">
     <!-- 首页内容放进 scroll-view：滚动条用原生属性隐藏；弹层打开时关掉 scroll-y，滚动不会穿透到首页 -->
     <scroll-view class="page-scroll"
-                 scroll-y="{{!showTaskSheet && !showSettingsSheet && !showPointsSheet}}"
+                 scroll-y="{{!showTaskSheet && !showSettingsSheet && !showPointsSheet && !showSortSheet}}"
                  enhanced="{{true}}" show-scrollbar="{{false}}" bounces="{{false}}">
     <view class="header">
         <view class="header-left">
@@ -93,7 +93,7 @@
                     <text class="task-chip-name">新建</text>
                 </view>
             </view>
-            <text class="task-tip" wx:if="{{tasks.length > 0}}">长按任务标签可修改或删除</text>
+            <text class="task-tip" wx:if="{{tasks.length > 0}}">长按任务标签可拖动排序、修改或删除</text>
 
             <view wx:if="{{tasks.length === 0}}" class="empty-card">
                 <text class="empty-emoji">📝</text>
@@ -117,8 +117,8 @@
                 <text class="checkin-hint">{{todaySigned ? '明天再来，坚持就是胜利' : '每天只能签到一次，别忘记啦'}}</text>
             </view>
 
-            <!-- 积分按用户 + 自然日累计：每天只有首次签到计分，与当前选中任务无关。 -->
-            <view class="card point-card" bindtap="openPointsSheet">
+            <!-- 积分按用户 + 自然日累计；只有点右上角等级名才打开规则弹层，卡片其余区域不响应，避免误触。 -->
+            <view class="card point-card">
                 <view class="point-head">
                     <view class="point-head-left">
                         <text class="point-title">我的签到积分</text>
@@ -127,7 +127,7 @@
                             <text class="point-unit">分</text>
                         </view>
                     </view>
-                    <text class="point-level" style="color:{{pointLevelColor}};background:{{pointLevelTint}}">{{pointLevel}}</text>
+                    <text class="point-level" style="color:{{pointLevelColor}};background:{{pointLevelTint}}" bindtap="openPointsSheet">{{pointLevel}} ›</text>
                 </view>
                 <view class="point-meta">
                     <text wx:if="{{points.today > 0}}">今日 +{{points.today}} 分 · 连续打卡 {{points.streak}} 天</text>
@@ -143,6 +143,14 @@
                 </view>
                 <view class="calendar-summary">
                     <text>当月已签到 {{stats.monthCount}} 次</text>
+                    <text wx:if="{{!isCurrentMonth}}" class="back-today" bindtap="backToCurrentMonth">回到本月 ›</text>
+                </view>
+                <view wx:if="{{holdActive}}" class="hold-bar">
+                    <view class="hold-bar-head">
+                        <text>按住 {{holdSecondsLeft}} 秒撤销今日签到</text>
+                        <text class="hold-bar-cancel">松开或滑动可放弃</text>
+                    </view>
+                    <view class="hold-track"><view class="hold-fill" style="width:{{holdProgress}}%"></view></view>
                 </view>
                 <view class="week-row">
                     <view wx:for="{{weekdays}}" wx:key="*this" class="week-cell"><text>{{item}}</text></view>
@@ -150,7 +158,10 @@
                 <view class="cal-grid">
                     <block wx:for="{{calendarCells}}" wx:key="key">
                         <view wx:if="{{item.blank}}" class="cal-cell blank"></view>
-                        <view wx:else class="cal-cell {{item.signed ? 'is-signed' : 'is-plain'}} {{item.isToday ? 'is-today' : ''}} {{item.isFuture ? 'is-future' : ''}}">
+                        <view wx:else class="cal-cell {{item.signed ? 'is-signed' : 'is-plain'}} {{item.isToday ? 'is-today' : ''}} {{item.isFuture ? 'is-future' : ''}} {{holdDate === item.date ? 'is-holding' : ''}}"
+                              data-date="{{item.date}}" data-signed="{{item.signed}}" data-today="{{item.isToday}}"
+                              bindtouchstart="onCalCellTouchStart" bindtouchmove="onCalCellTouchMove"
+                              bindtouchend="onCalCellTouchEnd" bindtouchcancel="onCalCellTouchEnd">
                             <text class="cal-day">{{item.day}}</text>
                             <text wx:if="{{item.signed}}" class="cal-check">✓</text>
                         </view>
@@ -161,6 +172,7 @@
                     <view class="legend-item"><view class="legend-dot plain"></view><text>未签到</text></view>
                     <view class="legend-item"><view class="legend-dot today"></view><text>今天</text></view>
                 </view>
+                <text wx:if="{{todaySigned && !holdActive}}" class="cal-cancel-tip">长按今天已签到的日期 5 秒，可撤销今日签到</text>
             </view>
 
             <view class="card record-card">
@@ -194,12 +206,12 @@
 
             <view class="card">
                 <text class="card-title">数据概览</text>
-                <view class="point-brief" bindtap="openPointsSheet">
+                <view class="point-brief">
                     <view>
                         <text class="point-brief-label">签到积分</text>
                         <text class="point-brief-num" style="color:{{pointLevelColor}}">{{points.total}}</text>
                     </view>
-                    <text class="point-brief-level" style="color:{{pointLevelColor}}">{{pointLevel}} ›</text>
+                    <text class="point-brief-level" style="color:{{pointLevelColor}}" bindtap="openPointsSheet">{{pointLevel}} ›</text>
                 </view>
                 <view class="stats-row inner">
                     <view class="stat-item">
@@ -317,6 +329,35 @@
                 <button class="primary-btn" bindtap="closePointsSheet">知道了</button>
             </view>
         </scroll-view>
+    </view>
+
+    <!-- 任务拖动排序：按住右侧手柄上下拖，松手只改本地顺序，点「保存顺序」才落库 -->
+    <view wx:if="{{showSortSheet}}" class="mask" bindtap="closeSortSheet" catchtouchmove="noop">
+        <view class="sheet sort-sheet {{sortCommitting ? 'committing' : ''}}" catchtap="noop">
+            <text class="sheet-title">拖动排序</text>
+            <text class="sheet-label">按住右侧手柄上下拖动，完成后点「保存顺序」</text>
+            <scroll-view class="sort-list" scroll-y="true" enhanced="{{true}}"
+                         show-scrollbar="{{false}}" bounces="{{false}}">
+                <view wx:for="{{sortTasks}}" wx:key="id"
+                      class="sort-row {{dragIndex === index ? 'dragging' : ''}}"
+                      style="border-left-color:{{item.color}};transform:translateY({{item.shift}}px)">
+                    <text class="sort-icon">{{item.icon}}</text>
+                    <text class="sort-name">{{item.title}}</text>
+                    <text class="sort-order">{{index + 1}}</text>
+                    <view class="sort-handle" data-index="{{index}}"
+                          bindtouchstart="onSortTouchStart" catchtouchmove="onSortTouchMove"
+                          bindtouchend="onSortTouchEnd" bindtouchcancel="onSortTouchEnd">
+                        <text class="sort-handle-bar"></text>
+                        <text class="sort-handle-bar"></text>
+                        <text class="sort-handle-bar"></text>
+                    </view>
+                </view>
+            </scroll-view>
+            <view class="sheet-actions">
+                <button class="ghost-btn" bindtap="closeSortSheet" disabled="{{sortBusy}}">取消</button>
+                <button class="primary-btn" bindtap="saveSortOrder" loading="{{sortBusy}}" disabled="{{sortBusy}}">保存顺序</button>
+            </view>
+        </view>
     </view>
 
     <view class="tabbar">

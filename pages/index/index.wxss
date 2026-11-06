@@ -320,8 +320,9 @@
     font-size: 24rpx;
 }
 
+/* 规则弹层唯一入口：只给等级徽标保留点击热区，卡片其余部分不响应。 */
 .point-level {
-    padding: 10rpx 22rpx;
+    padding: 12rpx 24rpx;
     border-radius: 999rpx;
     background: #EEF2FF;
     color: #4C6FFF;
@@ -360,7 +361,9 @@
     font-weight: 700;
 }
 
+/* 「我的」页的同款入口：只放大等级文字的热区，不改变视觉位置。 */
 .point-brief-level {
+    padding: 12rpx 0 12rpx 24rpx;
     color: #4C6FFF;
     font-size: 24rpx;
 }
@@ -420,9 +423,57 @@
 }
 
 .calendar-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin: -8rpx 0 20rpx;
     color: #8A93A3;
     font-size: 24rpx;
+}
+
+/* 翻到其它月份时才出现的快捷回退入口 */
+.back-today {
+    padding: 8rpx 18rpx;
+    border-radius: 999rpx;
+    background: #EEF2FF;
+    color: #4C6FFF;
+    font-size: 24rpx;
+    font-weight: 600;
+}
+
+/* 长按撤销当天签到的倒计时与进度 */
+.hold-bar {
+    margin: 0 0 20rpx;
+    padding: 18rpx 20rpx;
+    border-radius: 16rpx;
+    background: #FFF4EA;
+}
+
+.hold-bar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #B26A17;
+    font-size: 24rpx;
+}
+
+.hold-bar-cancel {
+    color: #B99A78;
+    font-size: 22rpx;
+}
+
+.hold-track {
+    height: 10rpx;
+    margin-top: 14rpx;
+    overflow: hidden;
+    border-radius: 999rpx;
+    background: #F4DFC8;
+}
+
+.hold-fill {
+    height: 100%;
+    border-radius: 999rpx;
+    background: linear-gradient(90deg, #FFB020, #F0802A);
 }
 
 .cal-title {
@@ -492,6 +543,11 @@
     box-shadow: 0 0 0 3rpx #FFB020;
 }
 
+/* 正在长按倒计时的格子，用橙色描边明确反馈 */
+.cal-cell.is-holding {
+    box-shadow: 0 0 0 4rpx #F0802A;
+}
+
 .cal-day {
     font-size: 26rpx;
     font-weight: 600;
@@ -549,6 +605,14 @@
 .legend-dot.today {
     border: 3rpx solid #FFB020;
     background: transparent;
+}
+
+.cal-cancel-tip {
+    display: block;
+    margin-top: 18rpx;
+    color: #A0A7B4;
+    font-size: 22rpx;
+    text-align: center;
 }
 
 .record-empty {
@@ -980,6 +1044,79 @@ scroll-view::-webkit-scrollbar,
 
 .sheet-actions .ghost-btn {
     margin-right: 20rpx;
+}
+
+/* 任务拖动排序：按住手柄拖动，列表本身只在未拖动时允许滚动。 */
+.sort-sheet {
+    padding-bottom: 40rpx;
+}
+
+.sort-list {
+    max-height: 60vh;
+    margin-top: 8rpx;
+}
+
+.sort-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 84rpx;
+    margin-bottom: 10rpx;
+    padding: 0 12rpx 0 20rpx;
+    border: 2rpx solid #E9ECF2;
+    border-left: 8rpx solid #4C6FFF;
+    border-radius: 18rpx;
+    background: #FFFFFF;
+    transition: transform 0.18s ease;
+}
+
+.sort-row.dragging {
+    z-index: 2;
+    border-color: #4C6FFF;
+    background: #F4F7FF;
+    box-shadow: 0 12rpx 28rpx rgba(76, 111, 255, 0.22);
+    transition: none;
+}
+
+/* 松手瞬间：先无过渡地重排并抵消跳变，下一帧再开启过渡平滑归位，避免弹跳。 */
+.sort-sheet.committing .sort-row {
+    transition: none;
+}
+
+.sort-icon {
+    font-size: 30rpx;
+}
+
+.sort-name {
+    flex: 1;
+    margin-left: 16rpx;
+    color: #3B4351;
+    font-size: 28rpx;
+}
+
+.sort-order {
+    margin-right: 20rpx;
+    color: #A0A7B4;
+    font-size: 24rpx;
+}
+
+.sort-handle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 72rpx;
+    height: 64rpx;
+    border-radius: 14rpx;
+    background: #F4F6FA;
+}
+
+.sort-handle-bar {
+    width: 28rpx;
+    height: 3rpx;
+    margin: 3rpx 0;
+    border-radius: 2rpx;
+    background: #98A2B3;
 }
 
 .tabbar {
