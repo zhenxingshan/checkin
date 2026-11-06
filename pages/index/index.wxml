@@ -8,9 +8,6 @@
             <text class="header-date">{{todayText}}</text>
             <text class="header-greeting" style="color:{{pointLevelColor}}">「{{encourageText}}」</text>
         </view>
-        <view class="header-badge" style="background:{{avatarBg}}">
-            <text>{{avatarEmoji}}</text>
-        </view>
     </view>
 
     <view class="error-strip" wx:if="{{errorMsg}}">

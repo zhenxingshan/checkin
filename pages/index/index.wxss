@@ -42,17 +42,6 @@
     line-height: 44rpx;
 }
 
-.header-badge {
-    display: flex;
-    flex-shrink: 0;
-    width: 88rpx;
-    height: 88rpx;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    font-size: 42rpx;
-}
-
 .error-strip {
     display: flex;
     align-items: center;
