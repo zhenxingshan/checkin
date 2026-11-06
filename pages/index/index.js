@@ -142,7 +142,6 @@ Page({
         authView: AUTH_VIEW,
         errorMsg: '',
         user: null,
-        openidText: '',
         avatarEmoji: '🌸',
         avatarBg: '#FFEAF3',
         avatarPresets: AVATAR_PRESETS,
@@ -308,7 +307,6 @@ Page({
             user: user,
             avatarEmoji: preset.emoji,
             avatarBg: preset.bg,
-            openidText: backend.maskOpenid(user),
             joinDate: String(user.created_at || '').slice(0, 10),
         });
         this.applyPointView(user && user.points);

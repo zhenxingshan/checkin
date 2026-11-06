@@ -198,10 +198,6 @@
                     </view>
                     <text class="edit-link" bindtap="openSettings">设置</text>
                 </view>
-                <view class="info-row">
-                    <text class="info-label">微信 OpenID</text>
-                    <text class="info-value">{{openidText}}</text>
-                </view>
             </view>
 
             <view class="card">
