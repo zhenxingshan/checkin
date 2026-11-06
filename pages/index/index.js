@@ -4,15 +4,27 @@ const snapshot = require('../../utils/snapshot');
 const dateUtil = require('../../utils/date');
 const encourage = require('../../utils/encourage');
 
-const TASK_ICONS = ['🌱', '📚', '🏃', '💧', '🧘', '🎯', '☀️', '✍️'];
-const TASK_COLORS = ['#4C6FFF', '#00B894', '#FF8A4C', '#A66CFF', '#F26D8B', '#2C9CDB'];
+const TASK_ICONS = [
+    '🌱', '📚', '🏃', '💧', '🧘', '🎯', '☀️', '✍️',
+    '🍎', '💪', '🌟', '⏰', '🎵', '💰', '🌈', '☕',
+];
+const TASK_COLORS = [
+    '#4C6FFF', '#00B894', '#FF8A4C', '#A66CFF', '#F26D8B', '#2C9CDB',
+    '#FFC53D', '#E03131', '#0CA678', '#1098AD', '#F06595', '#C28E5C',
+];
 const AVATAR_PRESETS = [
-    { key: 'sprout', emoji: '🌱', bg: '#E6F6EC' },
-    { key: 'sun', emoji: '☀️', bg: '#FFF3DC' },
+    { key: 'sprout', emoji: '🌸', bg: '#FFEAF3' },
+    { key: 'sun', emoji: '☁️', bg: '#EEF2F7' },
     { key: 'moon', emoji: '🌙', bg: '#E9EEFF' },
     { key: 'fire', emoji: '🔥', bg: '#FFEDE6' },
     { key: 'star', emoji: '⭐', bg: '#FFF6D9' },
     { key: 'leaf', emoji: '🍀', bg: '#E6F6EC' },
+    { key: 'panda', emoji: '🐼', bg: '#EEF2F7' },
+    { key: 'rabbit', emoji: '🐰', bg: '#FFF0F5' },
+    { key: 'fox', emoji: '🦊', bg: '#FFEFE6' },
+    { key: 'bear', emoji: '🐻', bg: '#F3ECE4' },
+    { key: 'chick', emoji: '🐤', bg: '#FFF8E1' },
+    { key: 'fish', emoji: '🐟', bg: '#E6F7FF' },
 ];
 const WEEK_CN = ['日', '一', '二', '三', '四', '五', '六'];
 // 每人最多 10 个打卡任务，前端先拦，服务端再校验一次（可被配置覆盖）。
@@ -131,8 +143,8 @@ Page({
         errorMsg: '',
         user: null,
         openidText: '',
-        avatarEmoji: '🌱',
-        avatarBg: '#E6F6EC',
+        avatarEmoji: '🌸',
+        avatarBg: '#FFEAF3',
         avatarPresets: AVATAR_PRESETS,
         joinDate: '',
         today: '',
