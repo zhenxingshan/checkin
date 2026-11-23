@@ -44,6 +44,7 @@ function monthPrefix(year, month) {
 function buildMonthCells(year, month, signedMap, todayText) {
     const offset = (new Date(year, month - 1, 1).getDay() + 6) % 7;
     const total = daysInMonth(year, month);
+    const yesterdayText = shiftDate(todayText, -1);
     const cells = [];
     for (let i = 0; i < offset; i += 1) {
         cells.push({ key: 'blank-' + i, blank: true });
@@ -57,6 +58,7 @@ function buildMonthCells(year, month, signedMap, todayText) {
             date: date,
             signed: !!signedMap[date],
             isToday: date === todayText,
+            isYesterday: date === yesterdayText,
             isFuture: date > todayText,
         });
     }

@@ -34,6 +34,8 @@ const MAX_NICKNAME_LEN = 16;
 const MAX_TASK_TITLE_LEN = 20;
 // 长按撤销当天签到：按住 5 秒，进度每 100ms 刷新；手指明显移动即放弃，避免滑动误触。
 const CANCEL_HOLD_MS = 5000;
+// 长按补签昨天：3 秒（比撤销短，用户明确知道是补签不是撤销）。
+const MAKEUP_HOLD_MS = 3000;
 const HOLD_TICK_MS = 100;
 const HOLD_MOVE_TOLERANCE = 12;
 
@@ -49,6 +51,7 @@ const DEFAULT_POINTS = {
     total: 0, today: 0, streak: 0, gained: 0,
     per_checkin: 1, next_stage_days: 3, max: 5,
     base: 1, step_days: 3, step_points: 1,
+    makeup_enabled: false, makeup_used: 0, makeup_limit: 5,
 };
 
 // 鼓励语的人员因子：由 openid 本地派生，只参与选句计算，不写日志、不上传。
@@ -74,6 +77,9 @@ function normalizePoints(view) {
         base: num('base', DEFAULT_POINTS.base),
         step_days: num('step_days', DEFAULT_POINTS.step_days),
         step_points: num('step_points', DEFAULT_POINTS.step_points),
+        makeup_enabled: raw.makeup_enabled === true,
+        makeup_used: num('makeup_used', 0),
+        makeup_limit: num('makeup_limit', 5),
     };
 }
 
@@ -156,12 +162,14 @@ Page({
         calendarMonth: 1,
         calendarTitle: '',
         isCurrentMonth: true,
-        // 长按撤销当天签到的进度态；只作用于「今天 + 已签到」的日历格子。
+        // 长按进度态：cancel=今天已签到撤销(5秒)，makeup=昨天未签到补签(3秒)。
         holdActive: false,
+        holdMode: '',
         holdProgress: 0,
         holdSecondsLeft: 5,
         holdDate: '',
         cancelBusy: false,
+        makeupBusy: false,
         weekdays: ['一', '二', '三', '四', '五', '六', '日'],
         calendarCells: [],
         stats: { monthCount: 0, totalCount: 0, streak: 0 },
@@ -280,6 +288,9 @@ Page({
                     pointLevel: encourage.levelOf(0),
                     pointLevelColor: encourage.themeOf(0).color,
                     pointLevelTint: encourage.themeOf(0).tint,
+                    makeupEnabled: false,
+                    makeupUsed: 0,
+                    makeupLimit: 5,
                     recentRecords: [],
                     todaySigned: false,
                 });
@@ -323,6 +334,9 @@ Page({
             pointLevel: theme.name,
             pointLevelColor: theme.color,
             pointLevelTint: theme.tint,
+            makeupEnabled: points.makeup_enabled,
+            makeupUsed: points.makeup_used,
+            makeupLimit: points.makeup_limit,
         };
         if (this.data.user) {
             // 同步回用户对象，快照里存的也是最新积分，冷启动不会显示上一次的旧分。
@@ -826,30 +840,43 @@ Page({
         });
     },
 
-    // 长按 5 秒撤销当天签到：只有「今天且已签到」的格子会启动计时，历史日期一律不响应。
+    // 长按日历格子：今天已签到→5 秒撤销；昨天未签到且已解锁→3 秒补签。
+    // 其余格子（历史、未来、今天未签）不启动计时，避免误触。
     onCalCellTouchStart(event) {
         const dataset = event.currentTarget.dataset;
-        if (!dataset.today || !dataset.signed) return;
-        if (this.data.syncing || this.data.checking || this.data.cancelBusy) return;
+        let mode = '';
+        if (dataset.today && dataset.signed) {
+            mode = 'cancel';
+        } else if (dataset.yesterday && !dataset.signed
+            && this.data.makeupEnabled && this.data.makeupUsed < this.data.makeupLimit) {
+            mode = 'makeup';
+        }
+        if (!mode) return;
+        if (this.data.syncing || this.data.checking || this.data.cancelBusy || this.data.makeupBusy) return;
         if (!this.data.activeTaskId) return;
         this.clearCancelHold();
         const touch = event.touches && event.touches[0];
         this._holdStartPos = touch ? { x: touch.clientX, y: touch.clientY } : null;
+        const duration = mode === 'makeup' ? MAKEUP_HOLD_MS : CANCEL_HOLD_MS;
         const self = this;
         const startAt = Date.now();
         this.setData({
-            holdActive: true, holdProgress: 0,
-            holdSecondsLeft: Math.ceil(CANCEL_HOLD_MS / 1000), holdDate: dataset.date,
+            holdActive: true, holdMode: mode, holdProgress: 0,
+            holdSecondsLeft: Math.ceil(duration / 1000), holdDate: dataset.date,
         });
         this._holdTimer = setInterval(function () {
             const elapsed = Date.now() - startAt;
             self.setData({
-                holdProgress: Math.min(100, Math.round(elapsed / CANCEL_HOLD_MS * 100)),
-                holdSecondsLeft: Math.max(1, Math.ceil((CANCEL_HOLD_MS - elapsed) / 1000)),
+                holdProgress: Math.min(100, Math.round(elapsed / duration * 100)),
+                holdSecondsLeft: Math.max(1, Math.ceil((duration - elapsed) / 1000)),
             });
-            if (elapsed < CANCEL_HOLD_MS) return;
+            if (elapsed < duration) return;
             self.clearCancelHold();
-            self.cancelTodayCheckin();
+            if (mode === 'makeup') {
+                self.makeupYesterday();
+            } else {
+                self.cancelTodayCheckin();
+            }
         }, HOLD_TICK_MS);
     },
 
@@ -874,7 +901,7 @@ Page({
         }
         this._holdStartPos = null;
         if (this.data.holdActive || this.data.holdProgress) {
-            this.setData({ holdActive: false, holdProgress: 0, holdDate: '' });
+            this.setData({ holdActive: false, holdMode: '', holdProgress: 0, holdDate: '' });
         }
     },
 
@@ -898,6 +925,31 @@ Page({
         }).catch(function () {
             self.setData({ cancelBusy: false });
             toast('撤销失败，请重试');
+        });
+    },
+
+    // 长按 3 秒补签昨天：日期由服务端算，这里只传当前任务；成功后刷新积分与日历。
+    makeupYesterday() {
+        if (this.data.makeupBusy || !this.data.activeTaskId) return;
+        const self = this;
+        this.setData({ makeupBusy: true });
+        return store.checkins.makeup(this.data.activeTaskId).then(function (res) {
+            self.setData({ makeupBusy: false });
+            if (res.error) {
+                toast(res.error.message);
+                return null;
+            }
+            const data = res.data || {};
+            self.applyPointView(data.points);
+            const gained = data.earned_points || 0;
+            wx.showToast({
+                title: gained > 0 ? '补签成功 +' + gained + ' 积分' : '已补签昨天',
+                icon: 'success',
+            });
+            return self.loadCalendar();
+        }).catch(function () {
+            self.setData({ makeupBusy: false });
+            toast('补签失败，请重试');
         });
     },
 

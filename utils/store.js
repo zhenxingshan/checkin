@@ -56,6 +56,11 @@ const checkins = {
     cancelToday(taskId) {
         return http.del('/api/checkins/today', { taskId: taskId });
     },
+
+    // 补签昨天：日期由服务端按 Asia/Shanghai 算，前端只传任务，不能伪造日期。
+    makeup(taskId) {
+        return http.post('/api/checkins/makeup', { taskId: taskId });
+    },
 };
 
 module.exports = { users: users, tasks: tasks, checkins: checkins };

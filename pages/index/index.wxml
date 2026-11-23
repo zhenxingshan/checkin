@@ -142,12 +142,13 @@
                     <text>当月已签到 {{stats.monthCount}} 次</text>
                     <text wx:if="{{!isCurrentMonth}}" class="back-today" bindtap="backToCurrentMonth">回到本月 ›</text>
                 </view>
-                <view wx:if="{{holdActive}}" class="hold-bar">
+                <view wx:if="{{holdActive}}" class="hold-bar {{holdMode === 'makeup' ? 'makeup' : ''}}">
                     <view class="hold-bar-head">
-                        <text>按住 {{holdSecondsLeft}} 秒撤销今日签到</text>
+                        <text wx:if="{{holdMode === 'makeup'}}">按住 {{holdSecondsLeft}} 秒补签昨天</text>
+                        <text wx:else>按住 {{holdSecondsLeft}} 秒撤销今日签到</text>
                         <text class="hold-bar-cancel">松开或滑动可放弃</text>
                     </view>
-                    <view class="hold-track"><view class="hold-fill" style="width:{{holdProgress}}%"></view></view>
+                    <view class="hold-track"><view class="hold-fill {{holdMode === 'makeup' ? 'makeup' : ''}}" style="width:{{holdProgress}}%"></view></view>
                 </view>
                 <view class="week-row">
                     <view wx:for="{{weekdays}}" wx:key="*this" class="week-cell"><text>{{item}}</text></view>
@@ -155,8 +156,9 @@
                 <view class="cal-grid">
                     <block wx:for="{{calendarCells}}" wx:key="key">
                         <view wx:if="{{item.blank}}" class="cal-cell blank"></view>
-                        <view wx:else class="cal-cell {{item.signed ? 'is-signed' : 'is-plain'}} {{item.isToday ? 'is-today' : ''}} {{item.isFuture ? 'is-future' : ''}} {{holdDate === item.date ? 'is-holding' : ''}}"
+                        <view wx:else class="cal-cell {{item.signed ? 'is-signed' : 'is-plain'}} {{item.isToday ? 'is-today' : ''}} {{item.isYesterday && !item.signed && makeupEnabled && makeupUsed < makeupLimit ? 'is-makeable' : ''}} {{item.isFuture ? 'is-future' : ''}} {{holdDate === item.date ? 'is-holding' : ''}}"
                               data-date="{{item.date}}" data-signed="{{item.signed}}" data-today="{{item.isToday}}"
+                              data-yesterday="{{item.isYesterday}}"
                               bindtouchstart="onCalCellTouchStart" bindtouchmove="onCalCellTouchMove"
                               bindtouchend="onCalCellTouchEnd" bindtouchcancel="onCalCellTouchEnd">
                             <text class="cal-day">{{item.day}}</text>
@@ -170,6 +172,7 @@
                     <view class="legend-item"><view class="legend-dot today"></view><text>今天</text></view>
                 </view>
                 <text wx:if="{{todaySigned && !holdActive}}" class="cal-cancel-tip">长按今天已签到的日期 5 秒，可撤销今日签到</text>
+                <text wx:if="{{makeupEnabled && makeupUsed < makeupLimit && !holdActive}}" class="cal-cancel-tip makeup-tip">长按昨天（3 秒）可补签 · 本月剩余 {{makeupLimit - makeupUsed}} 次</text>
             </view>
 
             <view class="card record-card">

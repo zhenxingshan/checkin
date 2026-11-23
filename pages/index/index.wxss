@@ -7,7 +7,8 @@
 .page-scroll {
     box-sizing: border-box;
     height: 100vh;
-    padding: 36rpx 28rpx 160rpx;
+    /* 底部留白 = tabbar(112rpx) + 底部安全区(44rpx) + 呼吸空间 */
+    padding: 36rpx 28rpx 204rpx;
 }
 
 .header {
@@ -465,6 +466,27 @@
     background: linear-gradient(90deg, #FFB020, #F0802A);
 }
 
+/* 补签模式：绿色系，与撤销的橙色明确区分 */
+.hold-bar.makeup {
+    background: #EAF7F0;
+}
+
+.hold-bar.makeup .hold-bar-head {
+    color: #1B8C5A;
+}
+
+.hold-bar.makeup .hold-bar-cancel {
+    color: #76A890;
+}
+
+.hold-bar.makeup .hold-track {
+    background: #CFEBDC;
+}
+
+.hold-fill.makeup {
+    background: linear-gradient(90deg, #2FBF7A, #1B8C5A);
+}
+
 .cal-title {
     font-size: 30rpx;
     font-weight: 700;
@@ -530,6 +552,15 @@
 
 .cal-cell.is-today {
     box-shadow: 0 0 0 3rpx #FFB020;
+}
+
+/* 可补签的昨天：绿色虚线描边提示可长按 3 秒补签 */
+.cal-cell.is-makeable {
+    border: 2rpx dashed #2FBF7A;
+}
+
+.makeup-tip {
+    color: #1B8C5A;
 }
 
 /* 正在长按倒计时的格子，用橙色描边明确反馈 */
@@ -1115,7 +1146,10 @@ scroll-view::-webkit-scrollbar,
     left: 0;
     z-index: 10;
     display: flex;
+    box-sizing: content-box;
     height: 112rpx;
+    /* 底部留白把图标文字顶上去，对齐微信原生菜单位置；白色背景仍铺到屏幕底部 */
+    padding-bottom: 44rpx;
     border-top: 2rpx solid #EDF0F5;
     background: #FFFFFF;
 }
