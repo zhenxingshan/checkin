@@ -431,9 +431,17 @@
     font-weight: 600;
 }
 
+/* 进度条与提示共用的固定高度插槽：切换内容时不改变卡片高度，
+   日历不会被顶上顶下、scroll-view 滚动位置保持稳定。 */
+.cal-hint-slot {
+    box-sizing: border-box;
+    height: 120rpx;
+    margin-top: 10rpx;
+}
+
 /* 长按撤销当天签到的倒计时与进度 */
 .hold-bar {
-    margin: 0 0 20rpx;
+    margin: 0;
     padding: 18rpx 20rpx;
     border-radius: 16rpx;
     background: #FFF4EA;
